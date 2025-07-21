@@ -7,6 +7,7 @@
     using System;
     using System.Collections.Generic;
     using System.IO;
+    using AudioManagerAPI.Features.Enums;
 
     /// <summary>
     /// Implements audio management with speaker lifecycle and caching for game audio playback.
@@ -28,6 +29,8 @@
         public AudioManager(ISpeakerFactory speakerFactory, int cacheSize = 50)
         {
             this.speakerFactory = speakerFactory ?? throw new ArgumentNullException(nameof(speakerFactory));
+            if (cacheSize <= 0)
+                throw new ArgumentException("Cache size must be positive.", nameof(cacheSize));
             this.audioCache = new AudioCache(cacheSize);
         }
 
@@ -39,6 +42,10 @@
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="key"/> or <paramref name="streamProvider"/> is null.</exception>
         public void RegisterAudio(string key, Func<Stream> streamProvider)
         {
+            if (key == null)
+                throw new ArgumentNullException(nameof(key));
+            if (streamProvider == null)
+                throw new ArgumentNullException(nameof(streamProvider));
             audioCache.Register(key, streamProvider);
         }
 
@@ -57,40 +64,60 @@
         }
 
         /// <summary>
-        /// Plays audio at the specified position with optional speaker configuration.
+        /// Plays audio at the specified position with optional configuration.
         /// </summary>
         /// <param name="key">The key identifying the audio to play.</param>
         /// <param name="position">The 3D position for playback.</param>
         /// <param name="loop">Whether the audio should loop.</param>
+        /// <param name="volume">The volume level (0.0 to 1.0).</param>
+        /// <param name="minDistance">The minimum distance where audio starts to fall off.</param>
+        /// <param name="maxDistance">The maximum distance where audio falls to zero.</param>
+        /// <param name="isSpatial">Whether to use spatial audio.</param>
+        /// <param name="priority">The priority of the audio.</param>
         /// <param name="configureSpeaker">An optional action to configure the speaker before playback.</param>
-        /// <returns>The controller ID of the speaker, or <c>null</c> if playback fails.</returns>
-        public byte? PlayAudio(string key, Vector3 position, bool loop, Action<ISpeaker> configureSpeaker = null)
+        /// <returns>The controller ID of the speaker, or 0 if playback fails.</returns>
+        public byte PlayAudio(string key, Vector3 position, bool loop, float volume, float minDistance, float maxDistance, bool isSpatial, AudioPriority priority, Action<ISpeaker> configureSpeaker = null)
         {
+            var samples = audioCache.Get(key);
+            if (samples == null)
+            {
+                return 0;
+            }
+
+            byte controllerId = 0;
+            bool allocated = false;
+
+            ControllerIdManager.AllocateId(
+                priority,
+                () => DestroySpeaker(controllerId),
+                id => { controllerId = id; allocated = true; },
+                () => { });
+
             lock (lockObject)
             {
-                var samples = audioCache.Get(key);
-                if (samples == null)
+                if (!allocated || controllerId == 0)
                 {
-                    return null;
+                    return 0;
                 }
 
-                byte? controllerId = ControllerIdManager.AllocateId();
-                if (!controllerId.HasValue)
-                {
-                    return null;
-                }
-
-                ISpeaker speaker = speakerFactory.CreateSpeaker(position, controllerId.Value);
+                ISpeaker speaker = speakerFactory.CreateSpeaker(position, controllerId);
                 if (speaker == null)
                 {
-                    ControllerIdManager.ReleaseId(controllerId.Value);
-                    return null;
+                    ControllerIdManager.ReleaseId(controllerId);
+                    return 0;
                 }
 
-                activeSpeakers[controllerId.Value] = speaker;
+                activeSpeakers[controllerId] = speaker;
+                if (speaker is ISpeakerWithPlayerFilter playerFilterSpeaker)
+                {
+                    playerFilterSpeaker.SetVolume(volume);
+                    playerFilterSpeaker.SetMinDistance(minDistance);
+                    playerFilterSpeaker.SetMaxDistance(maxDistance);
+                    playerFilterSpeaker.SetSpatialization(isSpatial);
+                }
                 configureSpeaker?.Invoke(speaker);
                 speaker.Play(samples, loop);
-                return controllerId.Value;
+                return controllerId;
             }
         }
 
@@ -100,10 +127,15 @@
         /// <param name="key">The key identifying the audio to play.</param>
         /// <param name="position">The 3D position for playback.</param>
         /// <param name="loop">Whether the audio should loop.</param>
-        /// <returns>The controller ID of the speaker, or <c>null</c> if playback fails.</returns>
-        public byte? PlayGlobalAudio(string key, Vector3 position, bool loop)
+        /// <param name="volume">The volume level (0.0 to 1.0).</param>
+        /// <param name="minDistance">The minimum distance where audio starts to fall off.</param>
+        /// <param name="maxDistance">The maximum distance where audio falls to zero.</param>
+        /// <param name="isSpatial">Whether to use spatial audio.</param>
+        /// <param name="priority">The priority of the audio.</param>
+        /// <returns>The controller ID of the speaker, or 0 if playback fails.</returns>
+        public byte PlayGlobalAudio(string key, Vector3 position, bool loop, float volume, float minDistance, float maxDistance, bool isSpatial, AudioPriority priority)
         {
-            return PlayAudio(key, position, loop, speaker =>
+            return PlayAudio(key, position, loop, volume, minDistance, maxDistance, isSpatial, priority, speaker =>
             {
                 if (speaker is ISpeakerWithPlayerFilter playerFilterSpeaker)
                 {

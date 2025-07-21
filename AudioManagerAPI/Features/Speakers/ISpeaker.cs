@@ -1,6 +1,4 @@
-﻿using AudioManagerAPI.Features.Speakers;
-
-namespace AudioManagerAPI.Features.Speakers
+﻿namespace AudioManagerAPI.Features.Speakers
 {
     /// <summary>
     /// Represents a speaker capable of playing audio samples at a specific position.

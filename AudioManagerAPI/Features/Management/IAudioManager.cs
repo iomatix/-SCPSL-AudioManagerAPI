@@ -4,6 +4,7 @@
     using AudioManagerAPI.Features.Speakers;
     using System;
     using System.IO;
+    using AudioManagerAPI.Features.Enums;
 
     /// <summary>
     /// Defines the contract for managing audio playback and speaker lifecycle.
@@ -24,9 +25,14 @@
         /// <param name="key">The key identifying the audio to play.</param>
         /// <param name="position">The 3D position for playback.</param>
         /// <param name="loop">Whether the audio should loop.</param>
+        /// <param name="volume">The volume level (0.0 to 1.0).</param>
+        /// <param name="minDistance">The minimum distance where audio starts to fall off.</param>
+        /// <param name="maxDistance">The maximum distance where audio falls to zero.</param>
+        /// <param name="isSpatial">Whether to use spatial audio.</param>
+        /// <param name="priority">The priority of the audio.</param>
         /// <param name="configureSpeaker">An optional action to configure the speaker before playback.</param>
         /// <returns>The controller ID of the speaker, or <c>null</c> if playback fails.</returns>
-        byte? PlayAudio(string key, Vector3 position, bool loop, Action<ISpeaker> configureSpeaker = null);
+        byte PlayAudio(string key, Vector3 position, bool loop, float volume, float minDistance, float maxDistance, bool isSpatial, AudioPriority priority, Action<ISpeaker> configureSpeaker = null);
 
         /// <summary>
         /// Plays audio globally, audible to all players, at the specified position.
@@ -34,8 +40,13 @@
         /// <param name="key">The key identifying the audio to play.</param>
         /// <param name="position">The 3D position for playback.</param>
         /// <param name="loop">Whether the audio should loop.</param>
+        /// <param name="volume">The volume level (0.0 to 1.0).</param>
+        /// <param name="minDistance">The minimum distance where audio starts to fall off.</param>
+        /// <param name="maxDistance">The maximum distance where audio falls to zero.</param>
+        /// <param name="isSpatial">Whether to use spatial audio.</param>
+        /// <param name="priority">The priority of the audio.</param>
         /// <returns>The controller ID of the speaker, or <c>null</c> if playback fails.</returns>
-        byte? PlayGlobalAudio(string key, Vector3 position, bool loop);
+        byte PlayGlobalAudio(string key, Vector3 position, bool loop, float volume, float minDistance, float maxDistance, bool isSpatial, AudioPriority priority);
 
         /// <summary>
         /// Stops the audio associated with the specified controller ID.
@@ -61,4 +72,5 @@
         /// <returns>The speaker instance, or <c>null</c> if not found.</returns>
         ISpeaker GetSpeaker(byte controllerId);
     }
+
 }
