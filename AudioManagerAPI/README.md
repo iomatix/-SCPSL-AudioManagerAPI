@@ -274,7 +274,7 @@ The `AudioCache` class processes WAV files with the following specifications:
 
 ## Contributing
 
-Contributions are welcome! Please submit issues or pull requests to the [GitHub repository](https://github.com/ioMatix/SCPSL-AudioManagerAPI).
+Contributions are welcome! Please submit issues or pull requests to the [GitHub repository](https://github.com/ioMatix/-SCPSL-AudioManagerAPI).
 
 ## License
 
