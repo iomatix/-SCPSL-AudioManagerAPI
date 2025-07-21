@@ -33,7 +33,6 @@
 
     <!-- Copyright notice -->
     <Copyright>© 2025 ioMatix. Licensed under LGPL-3.0-only.</Copyright>
-    <PackageLicenseExpression>LGPL-3.0-only</PackageLicenseExpression>
 
 
     <!-- Space- or semicolon-delimited tags to aid discoverability -->
@@ -77,8 +76,7 @@
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Xml" />
     <Reference Include="UnityEngine.CoreModule">
-      <HintPath>..\..\..\..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\SCP Secret
-        Laboratory Dedicated Server\SCPSL_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+      <HintPath>..\..\..\..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\SCP Secret Laboratory Dedicated Server\SCPSL_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
     </Reference>
 
   </ItemGroup>
