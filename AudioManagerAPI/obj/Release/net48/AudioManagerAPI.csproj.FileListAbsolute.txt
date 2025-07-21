@@ -1,0 +1,9 @@
+C:\Users\mateu\AppData\Roaming\EXILED\_dev\-SCPSL-AudioManager-API\AudioManagerAPI\bin\Release\net48\LICENSE
+C:\Users\mateu\AppData\Roaming\EXILED\_dev\-SCPSL-AudioManager-API\AudioManagerAPI\bin\Release\net48\README.md
+C:\Users\mateu\AppData\Roaming\EXILED\_dev\-SCPSL-AudioManager-API\AudioManagerAPI\bin\Release\net48\AudioManagerAPI.dll
+C:\Users\mateu\AppData\Roaming\EXILED\_dev\-SCPSL-AudioManager-API\AudioManagerAPI\bin\Release\net48\AudioManagerAPI.pdb
+C:\Users\mateu\AppData\Roaming\EXILED\_dev\-SCPSL-AudioManager-API\AudioManagerAPI\obj\Release\net48\AudioManagerAPI.csproj.AssemblyReference.cache
+C:\Users\mateu\AppData\Roaming\EXILED\_dev\-SCPSL-AudioManager-API\AudioManagerAPI\obj\Release\net48\AudioManagerAPI.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\mateu\AppData\Roaming\EXILED\_dev\-SCPSL-AudioManager-API\AudioManagerAPI\obj\Release\net48\AudioManagerAPI.csproj.CoreCompileInputs.cache
+C:\Users\mateu\AppData\Roaming\EXILED\_dev\-SCPSL-AudioManager-API\AudioManagerAPI\obj\Release\net48\AudioManagerAPI.dll
+C:\Users\mateu\AppData\Roaming\EXILED\_dev\-SCPSL-AudioManager-API\AudioManagerAPI\obj\Release\net48\AudioManagerAPI.pdb

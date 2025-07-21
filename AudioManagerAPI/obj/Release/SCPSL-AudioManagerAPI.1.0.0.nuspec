@@ -1,0 +1,32 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
+  <metadata>
+    <id>SCPSL-AudioManagerAPI</id>
+    <version>1.0.0</version>
+    <authors>ioMatix</authors>
+    <license type="file">LICENSE</license>
+    <licenseUrl>https://aka.ms/deprecateLicenseUrl</licenseUrl>
+    <readme>README.md</readme>
+    <description>Shared audio management system for SCP:SL plugins using LabAPI speakers with ID isolation and caching.</description>
+    <repository type="git" />
+    <dependencies>
+      <group targetFramework=".NETFramework4.8" />
+    </dependencies>
+    <frameworkAssemblies>
+      <frameworkAssembly assemblyName="Microsoft.CSharp" targetFramework=".NETFramework4.8" />
+      <frameworkAssembly assemblyName="System.Core" targetFramework=".NETFramework4.8" />
+      <frameworkAssembly assemblyName="System.Data.DataSetExtensions" targetFramework=".NETFramework4.8" />
+      <frameworkAssembly assemblyName="System.Data" targetFramework=".NETFramework4.8" />
+      <frameworkAssembly assemblyName="System" targetFramework=".NETFramework4.8" />
+      <frameworkAssembly assemblyName="System.Net.Http" targetFramework=".NETFramework4.8" />
+      <frameworkAssembly assemblyName="System.Numerics" targetFramework=".NETFramework4.8" />
+      <frameworkAssembly assemblyName="System.Xml" targetFramework=".NETFramework4.8" />
+      <frameworkAssembly assemblyName="System.Xml.Linq" targetFramework=".NETFramework4.8" />
+    </frameworkAssemblies>
+  </metadata>
+  <files>
+    <file src="C:\Users\mateu\AppData\Roaming\EXILED\_dev\-SCPSL-AudioManager-API\AudioManagerAPI\bin\Release\net48\AudioManagerAPI.dll" target="lib\net48\AudioManagerAPI.dll" />
+    <file src="C:\Users\mateu\AppData\Roaming\EXILED\_dev\-SCPSL-AudioManager-API\AudioManagerAPI\LICENSE" target="LICENSE" />
+    <file src="C:\Users\mateu\AppData\Roaming\EXILED\_dev\-SCPSL-AudioManager-API\AudioManagerAPI\README.md" target="README.md" />
+  </files>
+</package>

@@ -1,0 +1,53 @@
+﻿namespace AudioManagerAPI.Features.Managment
+{
+    using System;
+    using System.IO;
+    using System.Numerics;
+
+    /// <summary>
+    /// Defines the contract for managing audio playback and speaker lifecycle.
+    /// </summary>
+    public interface IAudioManager
+    {
+        /// <summary>
+        /// Registers an audio stream provider for a given key.
+        /// </summary>
+        /// <param name="key">The unique key for the audio.</param>
+        /// <param name="streamProvider">A function that provides the audio stream.</param>
+        void RegisterAudio(string key, Func<Stream> streamProvider);
+
+        /// <summary>
+        /// Plays audio at the specified position with optional configuration.
+        /// </summary>
+        /// <param name="key">The key identifying the audio to play.</param>
+        /// <param name="position">The 3D position for playback.</param>
+        /// <param name="loop">Whether the audio should loop.</param>
+        /// <param name="configureSpeaker">An optional action to configure the speaker before playback.</param>
+        /// <returns>The controller ID of the speaker, or <c>null</c> if playback fails.</returns>
+        byte? PlayAudio(string key, Vector3 position, bool loop, Action<ISpeaker> configureSpeaker = null);
+
+        /// <summary>
+        /// Stops the audio associated with the specified controller ID.
+        /// </summary>
+        /// <param name="controllerId">The controller ID of the speaker to stop.</param>
+        void StopAudio(byte controllerId);
+
+        /// <summary>
+        /// Destroys the speaker with the specified controller ID.
+        /// </summary>
+        /// <param name="controllerId">The controller ID of the speaker to destroy.</param>
+        void DestroySpeaker(byte controllerId);
+
+        /// <summary>
+        /// Cleans up all active speakers and resets controller IDs.
+        /// </summary>
+        void CleanupAllSpeakers();
+
+        /// <summary>
+        /// Retrieves the speaker instance for the specified controller ID.
+        /// </summary>
+        /// <param name="controllerId">The controller ID of the speaker.</param>
+        /// <returns>The speaker instance, or <c>null</c> if not found.</returns>
+        ISpeaker GetSpeaker(byte controllerId);
+    }
+}

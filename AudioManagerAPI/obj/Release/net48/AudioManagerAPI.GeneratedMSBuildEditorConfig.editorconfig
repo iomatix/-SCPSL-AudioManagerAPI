@@ -1,0 +1,8 @@
+is_global = true
+build_property.RootNamespace = AudioManagerAPI
+build_property.ProjectDir = C:\Users\mateu\AppData\Roaming\EXILED\_dev\-SCPSL-AudioManager-API\AudioManagerAPI\
+build_property.EnableComHosting = 
+build_property.EnableGeneratedComInterfaceComImportInterop = 
+build_property.CsWinRTUseWindowsUIXamlProjections = false
+build_property.EffectiveAnalysisLevelStyle = 
+build_property.EnableCodeStyleSeverity = 
