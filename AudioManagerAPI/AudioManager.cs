@@ -43,6 +43,20 @@
         }
 
         /// <summary>
+        /// Retrieves the speaker instance for the specified controller ID.
+        /// </summary>
+        /// <param name="controllerId">The controller ID of the speaker.</param>
+        /// <returns>The speaker instance, or <c>null</c> if not found.</returns>
+        public ISpeaker GetSpeaker(byte controllerId)
+        {
+            lock (lockObject)
+            {
+                activeSpeakers.TryGetValue(controllerId, out var speaker);
+                return speaker;
+            }
+        }
+
+        /// <summary>
         /// Plays audio at the specified position with optional speaker configuration.
         /// </summary>
         /// <param name="key">The key identifying the audio to play.</param>
@@ -78,6 +92,24 @@
                 speaker.Play(samples, loop);
                 return controllerId.Value;
             }
+        }
+
+        /// <summary>
+        /// Plays audio globally, audible to all players, at the specified position.
+        /// </summary>
+        /// <param name="key">The key identifying the audio to play.</param>
+        /// <param name="position">The 3D position for playback.</param>
+        /// <param name="loop">Whether the audio should loop.</param>
+        /// <returns>The controller ID of the speaker, or <c>null</c> if playback fails.</returns>
+        public byte? PlayGlobalAudio(string key, Vector3 position, bool loop)
+        {
+            return PlayAudio(key, position, loop, speaker =>
+            {
+                if (speaker is ISpeakerWithPlayerFilter playerFilterSpeaker)
+                {
+                    playerFilterSpeaker.SetValidPlayers(p => true);
+                }
+            });
         }
 
         /// <summary>
@@ -127,20 +159,6 @@
                     ControllerIdManager.ReleaseId(speaker.Key);
                 }
                 activeSpeakers.Clear();
-            }
-        }
-
-        /// <summary>
-        /// Retrieves the speaker instance for the specified controller ID.
-        /// </summary>
-        /// <param name="controllerId">The controller ID of the speaker.</param>
-        /// <returns>The speaker instance, or <c>null</c> if not found.</returns>
-        public ISpeaker GetSpeaker(byte controllerId)
-        {
-            lock (lockObject)
-            {
-                activeSpeakers.TryGetValue(controllerId, out var speaker);
-                return speaker;
             }
         }
     }

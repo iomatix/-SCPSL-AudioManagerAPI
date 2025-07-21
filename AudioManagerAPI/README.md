@@ -205,7 +205,8 @@ The `AudioCache` class processes WAV files with the following specifications:
 
 - **`IAudioManager.RegisterAudio(string key, Func<Stream> streamProvider)`**: Registers a WAV stream for lazy loading.
 - **`IAudioManager.PlayAudio(string key, Vector3 position, bool loop, Action<ISpeaker> configureSpeaker)`**: Plays audio at a position with optional configuration.
-- **`IAudioManager.StopAudio(byte controllerId)`**: Stops audio for a specific speaker.
+- **`IAudioManager.PlayAudio(string key, Vector3 position, bool loop)`**: Plays audio globally, audible to all players.
+- - **`IAudioManager.StopAudio(byte controllerId)`**: Stops audio for a specific speaker.
 - **`IAudioManager.DestroySpeaker(byte controllerId)`**: Destroys a speaker and releases its ID.
 - **`IAudioManager.CleanupAllSpeakers()`**: Cleans up all active speakers and releases their IDs.
 - **`IAudioManager.GetSpeaker(byte controllerId)`**: Retrieves a speaker instance for further configuration.

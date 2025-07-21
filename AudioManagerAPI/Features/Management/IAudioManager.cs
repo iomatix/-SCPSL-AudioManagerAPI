@@ -29,6 +29,15 @@
         byte? PlayAudio(string key, Vector3 position, bool loop, Action<ISpeaker> configureSpeaker = null);
 
         /// <summary>
+        /// Plays audio globally, audible to all players, at the specified position.
+        /// </summary>
+        /// <param name="key">The key identifying the audio to play.</param>
+        /// <param name="position">The 3D position for playback.</param>
+        /// <param name="loop">Whether the audio should loop.</param>
+        /// <returns>The controller ID of the speaker, or <c>null</c> if playback fails.</returns>
+        byte? PlayGlobalAudio(string key, Vector3 position, bool loop);
+
+        /// <summary>
         /// Stops the audio associated with the specified controller ID.
         /// </summary>
         /// <param name="controllerId">The controller ID of the speaker to stop.</param>
