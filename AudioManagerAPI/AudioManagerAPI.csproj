@@ -22,15 +22,19 @@
     <PackageId>SCPSL-AudioManagerAPI</PackageId>
     <Version>1.0.0</Version>
 
-    <!-- Homepage or documentation URL -->
-    <PackageProjectUrl>https://github.com/iomatix/-SCPSL-AudioManagerAPI</PackageProjectUrl>
-
     <!-- Windows RIDs for restore/pack -->
     <RuntimeIdentifiers>win;win-x64;win-x86</RuntimeIdentifiers>
 
     <!-- Source repository info -->
+    <PackageProjectUrl>https://github.com/iomatix/-SCPSL-AudioManagerAPI</PackageProjectUrl>
     <RepositoryUrl>https://github.com/iomatix/-SCPSL-AudioManagerAPI.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
+
+
+    <!-- Copyright notice -->
+    <Copyright>© 2025 ioMatix. Licensed under LGPL-3.0-only.</Copyright>
+    <PackageLicenseExpression>LGPL-3.0-only</PackageLicenseExpression>
+
 
     <!-- Space- or semicolon-delimited tags to aid discoverability -->
     <PackageTags>audio scpsl scp-sl labapi unity speaker scp secret laboratory scp-exiled
@@ -48,19 +52,18 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="LICENSE">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    <None Include="LICENSE">
       <Pack>true</Pack>
       <PackagePath></PackagePath>
       <Visible>true</Visible>
-    </EmbeddedResource>
-    <EmbeddedResource Include="README.md">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Include="README.md">
       <Pack>true</Pack>
       <PackagePath></PackagePath>
       <Visible>true</Visible>
-    </EmbeddedResource>
+    </None>
   </ItemGroup>
+
 
   <ItemGroup>
     <!-- .NET Framework references -->
