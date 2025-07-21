@@ -14,7 +14,7 @@ namespace AudioManagerAPI.Cache
         private readonly Dictionary<string, float[]> cache;
         private readonly LinkedList<string> lruOrder;
         private readonly Dictionary<string, Func<Stream>> streamProviders;
-        private readonly object lockObject = new Dictionary<byte, ISpeaker>();
+        private readonly object lockObject = new object();
 
         /// <summary>
         /// Initializes a new instance of the <see cref="AudioCache"/> class.
@@ -37,6 +37,7 @@ namespace AudioManagerAPI.Cache
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="key"/> or <paramref name="streamProvider"/> is null.</exception>
         public void Register(string key, Func<Stream> streamProvider)
         {
+            if (key == null) throw new ArgumentNullException(nameof(key));
             lock (lockObject)
             {
                 if (!streamProviders.ContainsKey(key))
@@ -86,13 +87,16 @@ namespace AudioManagerAPI.Cache
             }
         }
 
+        /// <summary>
+        /// Supports only 48kHz, Mono, Singed 16-bit PCM .wav files
+        /// </summary>
         private float[] LoadAudio(Stream stream)
         {
             try
             {
                 using (var reader = new BinaryReader(stream))
                 {
-                    reader.BaseStream.Seek(44, SeekOrigin.Begin);
+                    reader.BaseStream.Seek(44, SeekOrigin.Begin); // Skip WAV header
                     byte[] rawData = reader.ReadBytes((int)(stream.Length - 44));
                     float[] samples = new float[rawData.Length / 2];
                     for (int i = 0; i < samples.Length; i++)

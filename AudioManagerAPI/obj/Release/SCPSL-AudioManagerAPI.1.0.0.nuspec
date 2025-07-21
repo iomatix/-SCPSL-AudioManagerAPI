@@ -8,7 +8,7 @@
     <licenseUrl>https://aka.ms/deprecateLicenseUrl</licenseUrl>
     <readme>README.md</readme>
     <description>Shared audio management system for SCP:SL plugins using LabAPI speakers with ID isolation and caching.</description>
-    <repository type="git" />
+    <repository type="git" commit="6390302daf60e800e08cbb215eb77373cdae08f4" />
     <dependencies>
       <group targetFramework=".NETFramework4.8" />
     </dependencies>

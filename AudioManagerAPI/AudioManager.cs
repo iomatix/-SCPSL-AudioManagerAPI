@@ -1,12 +1,12 @@
 ﻿namespace AudioManagerAPI
 {
+    using UnityEngine;
     using AudioManagerAPI.Cache;
-    using AudioManagerAPI.Features.Managment;
+    using AudioManagerAPI.Features.Management;
+    using AudioManagerAPI.Features.Speakers;
     using System;
     using System.Collections.Generic;
     using System.IO;
-    using System.Linq;
-    using System.Numerics;
 
     /// <summary>
     /// Implements audio management with speaker lifecycle and caching for game audio playback.
@@ -16,17 +16,19 @@
         private readonly ISpeakerFactory speakerFactory;
         private readonly AudioCache audioCache;
         private readonly Dictionary<byte, ISpeaker> activeSpeakers = new Dictionary<byte, ISpeaker>();
+        private readonly object lockObject = new object();
 
         /// <summary>
         /// Initializes a new instance of the <see cref="AudioManager"/> class.
         /// </summary>
-        /// <param name="factory">The factory used to create speaker instances.</param>
-        /// <param name="cache">The audio cache for managing audio samples.</param>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="factory"/> or <paramref name="cache"/> is null.</exception>
-        public AudioManager(ISpeakerFactory factory, AudioCache cache)
+        /// <param name="speakerFactory">The factory used to create speaker instances.</param>
+        /// <param name="cacheSize">The maximum number of audio samples to cache.</param>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="speakerFactory"/> is null.</exception>
+        /// <exception cref="ArgumentException">Thrown if <paramref name="cacheSize"/> is not positive.</exception>
+        public AudioManager(ISpeakerFactory speakerFactory, int cacheSize = 50)
         {
-            speakerFactory = factory ?? throw new ArgumentNullException(nameof(factory));
-            audioCache = cache ?? throw new ArgumentNullException(nameof(cache));
+            this.speakerFactory = speakerFactory ?? throw new ArgumentNullException(nameof(speakerFactory));
+            this.audioCache = new AudioCache(cacheSize);
         }
 
         /// <summary>
@@ -44,29 +46,38 @@
         /// Plays audio at the specified position with optional speaker configuration.
         /// </summary>
         /// <param name="key">The key identifying the audio to play.</param>
-        /// <param name="position">The 3D position for audio playback.</param>
+        /// <param name="position">The 3D position for playback.</param>
         /// <param name="loop">Whether the audio should loop.</param>
         /// <param name="configureSpeaker">An optional action to configure the speaker before playback.</param>
         /// <returns>The controller ID of the speaker, or <c>null</c> if playback fails.</returns>
         public byte? PlayAudio(string key, Vector3 position, bool loop, Action<ISpeaker> configureSpeaker = null)
         {
-            var samples = audioCache.Get(key);
-            if (samples == null) return null;
-
-            byte? controllerId = ControllerIdManager.AllocateId();
-            if (!controllerId.HasValue) return null;
-
-            ISpeaker speaker = speakerFactory.CreateSpeaker(position, controllerId.Value);
-            if (speaker == null)
+            lock (lockObject)
             {
-                ControllerIdManager.ReleaseId(controllerId.Value);
-                return null;
-            }
+                var samples = audioCache.Get(key);
+                if (samples == null)
+                {
+                    return null;
+                }
 
-            activeSpeakers[controllerId.Value] = speaker;
-            configureSpeaker?.Invoke(speaker);
-            speaker.Play(samples, loop);
-            return controllerId.Value;
+                byte? controllerId = ControllerIdManager.AllocateId();
+                if (!controllerId.HasValue)
+                {
+                    return null;
+                }
+
+                ISpeaker speaker = speakerFactory.CreateSpeaker(position, controllerId.Value);
+                if (speaker == null)
+                {
+                    ControllerIdManager.ReleaseId(controllerId.Value);
+                    return null;
+                }
+
+                activeSpeakers[controllerId.Value] = speaker;
+                configureSpeaker?.Invoke(speaker);
+                speaker.Play(samples, loop);
+                return controllerId.Value;
+            }
         }
 
         /// <summary>
@@ -75,9 +86,12 @@
         /// <param name="controllerId">The controller ID of the speaker to stop.</param>
         public void StopAudio(byte controllerId)
         {
-            if (activeSpeakers.TryGetValue(controllerId, out var speaker))
+            lock (lockObject)
             {
-                speaker.Stop();
+                if (activeSpeakers.TryGetValue(controllerId, out var speaker))
+                {
+                    speaker.Stop();
+                }
             }
         }
 
@@ -87,27 +101,33 @@
         /// <param name="controllerId">The controller ID of the speaker to destroy.</param>
         public void DestroySpeaker(byte controllerId)
         {
-            if (activeSpeakers.TryGetValue(controllerId, out var speaker))
+            lock (lockObject)
             {
-                speaker.Stop();
-                speaker.Destroy();
-                activeSpeakers.Remove(controllerId);
-                ControllerIdManager.ReleaseId(controllerId);
+                if (activeSpeakers.TryGetValue(controllerId, out var speaker))
+                {
+                    speaker.Stop();
+                    speaker.Destroy();
+                    activeSpeakers.Remove(controllerId);
+                    ControllerIdManager.ReleaseId(controllerId);
+                }
             }
         }
 
         /// <summary>
-        /// Cleans up all active speakers and resets controller IDs.
+        /// Cleans up all active speakers and releases their controller IDs.
         /// </summary>
         public void CleanupAllSpeakers()
         {
-            foreach (var speaker in activeSpeakers)
+            lock (lockObject)
             {
-                speaker.Value.Stop();
-                speaker.Value.Destroy();
-                ControllerIdManager.ReleaseId(speaker.Key);
+                foreach (var speaker in activeSpeakers)
+                {
+                    speaker.Value.Stop();
+                    speaker.Value.Destroy();
+                    ControllerIdManager.ReleaseId(speaker.Key);
+                }
+                activeSpeakers.Clear();
             }
-            activeSpeakers.Clear();
         }
 
         /// <summary>
@@ -117,8 +137,11 @@
         /// <returns>The speaker instance, or <c>null</c> if not found.</returns>
         public ISpeaker GetSpeaker(byte controllerId)
         {
-            activeSpeakers.TryGetValue(controllerId, out var speaker);
-            return speaker;
+            lock (lockObject)
+            {
+                activeSpeakers.TryGetValue(controllerId, out var speaker);
+                return speaker;
+            }
         }
     }
 }

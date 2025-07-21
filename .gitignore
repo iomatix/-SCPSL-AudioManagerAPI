@@ -1,0 +1,64 @@
+## Ignore build outputs
+[Bb]in/
+[Oo]bj/
+
+## Visual Studio temporary files, user-specific settings, caches
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+.vs/
+
+## Rider project files
+.idea/
+*.sln.iml
+
+## MonoDevelop / Xamarin Studio
+*.userprefs
+
+## NuGet
+*.nupkg
+packages/
+!packages/**/*.targets      # keep MSBuild targets if you check them in
+
+## DotCover
+*.dotCover
+
+## NCrunch
+*_NCrunch_*
+.*crunch*.local.xml
+nCrunchTemp_*
+
+## Test results
+[Tt]est[Rr]esult*/ 
+*.trx
+*.coverage
+*.coveragexml
+
+## Publish output
+*.Publish.xml
+[Pp]ublish/
+
+## Visual Studio profiler
+*.psess
+*.vsp
+*.vspx
+
+## IIS Express / web artifacts
+/.vs/*/applicationhost.config
+
+## Resharper
+_ReSharper*/
+*.ReSharper.User
+
+## CodeRush
+.cr/
+
+## User files and logs
+*.log
+*.lock.json
+
+## OS generated
+.DS_Store
+Thumbs.db
+ehthumbs.db

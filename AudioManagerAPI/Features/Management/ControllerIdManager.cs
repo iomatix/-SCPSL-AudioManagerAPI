@@ -1,4 +1,4 @@
-﻿namespace AudioManagerAPI.Features.Managment
+﻿namespace AudioManagerAPI.Features.Management
 {
     using System.Collections.Generic;
     using System.Linq;
@@ -8,8 +8,8 @@
     /// </summary>
     public static class ControllerIdManager
     {
-        private static readonly object lockObject = new Dictionary<byte, ISpeaker>();
         private static readonly HashSet<byte> availableIds = new HashSet<byte>();
+        private static readonly object lockObject = new object();
 
         /// <summary>
         /// Initializes the controller ID manager with a default range of IDs.

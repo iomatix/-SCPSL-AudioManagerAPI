@@ -7,3 +7,8 @@ C:\Users\mateu\AppData\Roaming\EXILED\_dev\-SCPSL-AudioManager-API\AudioManagerA
 C:\Users\mateu\AppData\Roaming\EXILED\_dev\-SCPSL-AudioManager-API\AudioManagerAPI\obj\Release\net48\AudioManagerAPI.csproj.CoreCompileInputs.cache
 C:\Users\mateu\AppData\Roaming\EXILED\_dev\-SCPSL-AudioManager-API\AudioManagerAPI\obj\Release\net48\AudioManagerAPI.dll
 C:\Users\mateu\AppData\Roaming\EXILED\_dev\-SCPSL-AudioManager-API\AudioManagerAPI\obj\Release\net48\AudioManagerAPI.pdb
+C:\Users\mateu\AppData\Roaming\EXILED\_dev\-SCPSL-AudioManager-API\AudioManagerAPI\obj\Release\net48\AudioManagerAPI.sourcelink.json
+C:\Users\mateu\AppData\Roaming\EXILED\_dev\-SCPSL-AudioManager-API\AudioManagerAPI\bin\Release\net48\UnityEngine.CoreModule.dll
+C:\Users\mateu\AppData\Roaming\EXILED\_dev\-SCPSL-AudioManager-API\AudioManagerAPI\bin\Release\net48\netstandard.dll
+C:\Users\mateu\AppData\Roaming\EXILED\_dev\-SCPSL-AudioManager-API\AudioManagerAPI\bin\Release\net48\UnityEngine.SharedInternalsModule.dll
+C:\Users\mateu\AppData\Roaming\EXILED\_dev\-SCPSL-AudioManager-API\AudioManagerAPI\obj\Release\net48\AudioMan.B29438C3.Up2Date

@@ -1,6 +1,6 @@
-﻿namespace AudioManagerAPI
+﻿namespace AudioManagerAPI.Features.Speakers
 {
-    using System.Numerics;
+    using UnityEngine;
 
     /// <summary>
     /// Defines a factory for creating speaker instances.
@@ -12,7 +12,7 @@
         /// </summary>
         /// <param name="position">The 3D position where the speaker should be created.</param>
         /// <param name="controllerId">The unique identifier for the speaker.</param>
-        /// <returns>A new speaker instance, or <c>null</c> if creation fails.</returns>
+        /// <returns>A new <see cref="ISpeaker"/> instance, or <c>null</c> if creation fails.</returns>
         ISpeaker CreateSpeaker(Vector3 position, byte controllerId);
     }
 }

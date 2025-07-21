@@ -1,8 +1,9 @@
-﻿namespace AudioManagerAPI.Features.Managment
+﻿namespace AudioManagerAPI.Features.Management
 {
+    using UnityEngine;
+    using AudioManagerAPI.Features.Speakers;
     using System;
     using System.IO;
-    using System.Numerics;
 
     /// <summary>
     /// Defines the contract for managing audio playback and speaker lifecycle.
@@ -14,6 +15,7 @@
         /// </summary>
         /// <param name="key">The unique key for the audio.</param>
         /// <param name="streamProvider">A function that provides the audio stream.</param>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="key"/> or <paramref name="streamProvider"/> is null.</exception>
         void RegisterAudio(string key, Func<Stream> streamProvider);
 
         /// <summary>
@@ -39,7 +41,7 @@
         void DestroySpeaker(byte controllerId);
 
         /// <summary>
-        /// Cleans up all active speakers and resets controller IDs.
+        /// Cleans up all active speakers and releases their controller IDs.
         /// </summary>
         void CleanupAllSpeakers();
 

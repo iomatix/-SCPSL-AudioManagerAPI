@@ -5,53 +5,6 @@
     {
       "AbsoluteMoniker": "D:0:0:{59532660-119E-4A35-91B7-D03B204E391F}|AudioManagerAPI\\AudioManagerAPI.csproj|c:\\users\\mateu\\appdata\\roaming\\exiled\\_dev\\-scpsl-audiomanager-api\\audiomanagerapi\\readme.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
       "RelativeMoniker": "D:0:0:{59532660-119E-4A35-91B7-D03B204E391F}|AudioManagerAPI\\AudioManagerAPI.csproj|solutionrelative:audiomanagerapi\\readme.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{59532660-119E-4A35-91B7-D03B204E391F}|AudioManagerAPI\\AudioManagerAPI.csproj|c:\\users\\mateu\\appdata\\roaming\\exiled\\_dev\\-scpsl-audiomanager-api\\audiomanagerapi\\properties\\assemblyinfo.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{59532660-119E-4A35-91B7-D03B204E391F}|AudioManagerAPI\\AudioManagerAPI.csproj|solutionrelative:audiomanagerapi\\properties\\assemblyinfo.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{59532660-119E-4A35-91B7-D03B204E391F}|AudioManagerAPI\\AudioManagerAPI.csproj|c:\\users\\mateu\\appdata\\roaming\\exiled\\_dev\\-scpsl-audiomanager-api\\audiomanagerapi\\license||{8B382828-6202-11D1-8870-0000F87579D2}",
-      "RelativeMoniker": "D:0:0:{59532660-119E-4A35-91B7-D03B204E391F}|AudioManagerAPI\\AudioManagerAPI.csproj|solutionrelative:audiomanagerapi\\license||{8B382828-6202-11D1-8870-0000F87579D2}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Program Files\\dotnet\\sdk\\9.0.302\\Sdks\\NuGet.Build.Tasks.Pack\\build\\NuGet.Build.Tasks.Pack.targets||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{59532660-119E-4A35-91B7-D03B204E391F}|AudioManagerAPI\\AudioManagerAPI.csproj|c:\\users\\mateu\\appdata\\roaming\\exiled\\_dev\\-scpsl-audiomanager-api\\audiomanagerapi\\audiomanagerapi.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|",
-      "RelativeMoniker": "D:0:0:{59532660-119E-4A35-91B7-D03B204E391F}|AudioManagerAPI\\AudioManagerAPI.csproj|solutionrelative:audiomanagerapi\\audiomanagerapi.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{59532660-119E-4A35-91B7-D03B204E391F}|AudioManagerAPI\\AudioManagerAPI.csproj|c:\\users\\mateu\\appdata\\roaming\\exiled\\_dev\\-scpsl-audiomanager-api\\audiomanagerapi\\audiomanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{59532660-119E-4A35-91B7-D03B204E391F}|AudioManagerAPI\\AudioManagerAPI.csproj|solutionrelative:audiomanagerapi\\audiomanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{59532660-119E-4A35-91B7-D03B204E391F}|AudioManagerAPI\\AudioManagerAPI.csproj|c:\\users\\mateu\\appdata\\roaming\\exiled\\_dev\\-scpsl-audiomanager-api\\audiomanagerapi\\features\\speakers\\ispeaker.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{59532660-119E-4A35-91B7-D03B204E391F}|AudioManagerAPI\\AudioManagerAPI.csproj|solutionrelative:audiomanagerapi\\features\\speakers\\ispeaker.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{59532660-119E-4A35-91B7-D03B204E391F}|AudioManagerAPI\\AudioManagerAPI.csproj|c:\\users\\mateu\\appdata\\roaming\\exiled\\_dev\\-scpsl-audiomanager-api\\audiomanagerapi\\features\\managment\\controlleridmanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{59532660-119E-4A35-91B7-D03B204E391F}|AudioManagerAPI\\AudioManagerAPI.csproj|solutionrelative:audiomanagerapi\\features\\managment\\controlleridmanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{59532660-119E-4A35-91B7-D03B204E391F}|AudioManagerAPI\\AudioManagerAPI.csproj|c:\\users\\mateu\\appdata\\roaming\\exiled\\_dev\\-scpsl-audiomanager-api\\audiomanagerapi\\caching\\audiocache.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{59532660-119E-4A35-91B7-D03B204E391F}|AudioManagerAPI\\AudioManagerAPI.csproj|solutionrelative:audiomanagerapi\\caching\\audiocache.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{59532660-119E-4A35-91B7-D03B204E391F}|AudioManagerAPI\\AudioManagerAPI.csproj|c:\\users\\mateu\\appdata\\roaming\\exiled\\_dev\\-scpsl-audiomanager-api\\audiomanagerapi\\features\\speakers\\ispeakerfactory.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{59532660-119E-4A35-91B7-D03B204E391F}|AudioManagerAPI\\AudioManagerAPI.csproj|solutionrelative:audiomanagerapi\\features\\speakers\\ispeakerfactory.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{59532660-119E-4A35-91B7-D03B204E391F}|AudioManagerAPI\\AudioManagerAPI.csproj|c:\\users\\mateu\\appdata\\roaming\\exiled\\_dev\\-scpsl-audiomanager-api\\audiomanagerapi\\features\\managment\\iaudiomanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{59532660-119E-4A35-91B7-D03B204E391F}|AudioManagerAPI\\AudioManagerAPI.csproj|solutionrelative:audiomanagerapi\\features\\managment\\iaudiomanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\mateu\\AppData\\Roaming\\EXILED\\_dev\\-SCPSL-AudioManager-API\\AudioManagerAPI\\obj\\Release\\net48\\AudioManagerAPI.AssemblyInfo.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:AudioManagerAPI\\obj\\Release\\net48\\AudioManagerAPI.AssemblyInfo.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\mateu\\AppData\\Roaming\\EXILED\\_dev\\-SCPSL-AudioManager-API\\AudioManagerAPI\\AudioCache.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:AudioManagerAPI\\AudioCache.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     }
   ],
   "DocumentGroupContainers": [
@@ -61,119 +14,15 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 10,
+          "SelectedChildIndex": 2,
           "Children": [
             {
               "$type": "Bookmark",
               "Name": "ST:0:0:{cce594b6-0c39-4442-ba28-10c64ac7e89f}"
             },
             {
-              "$type": "Document",
-              "DocumentIndex": 12,
-              "Title": "AudioCache.cs",
-              "DocumentMoniker": "C:\\Users\\mateu\\AppData\\Roaming\\EXILED\\_dev\\-SCPSL-AudioManager-API\\AudioManagerAPI\\AudioCache.cs",
-              "RelativeDocumentMoniker": "AudioManagerAPI\\AudioCache.cs",
-              "ToolTip": "C:\\Users\\mateu\\AppData\\Roaming\\EXILED\\_dev\\-SCPSL-AudioManager-API\\AudioManagerAPI\\AudioCache.cs",
-              "RelativeToolTip": "AudioManagerAPI\\AudioCache.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-07-21T16:07:53.204Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 1,
-              "Title": "AssemblyInfo.cs",
-              "DocumentMoniker": "C:\\Users\\mateu\\AppData\\Roaming\\EXILED\\_dev\\-SCPSL-AudioManager-API\\AudioManagerAPI\\Properties\\AssemblyInfo.cs",
-              "RelativeDocumentMoniker": "AudioManagerAPI\\Properties\\AssemblyInfo.cs",
-              "ToolTip": "C:\\Users\\mateu\\AppData\\Roaming\\EXILED\\_dev\\-SCPSL-AudioManager-API\\AudioManagerAPI\\Properties\\AssemblyInfo.cs",
-              "RelativeToolTip": "AudioManagerAPI\\Properties\\AssemblyInfo.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-07-21T16:08:53.803Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 5,
-              "Title": "AudioManager.cs",
-              "DocumentMoniker": "C:\\Users\\mateu\\AppData\\Roaming\\EXILED\\_dev\\-SCPSL-AudioManager-API\\AudioManagerAPI\\AudioManager.cs",
-              "RelativeDocumentMoniker": "AudioManagerAPI\\AudioManager.cs",
-              "ToolTip": "C:\\Users\\mateu\\AppData\\Roaming\\EXILED\\_dev\\-SCPSL-AudioManager-API\\AudioManagerAPI\\AudioManager.cs",
-              "RelativeToolTip": "AudioManagerAPI\\AudioManager.cs",
-              "ViewState": "AgIAAGYAAAAAAAAAAAAmwBEAAABjAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-07-21T16:11:02.389Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 11,
-              "Title": "AudioManagerAPI.AssemblyInfo.cs",
-              "DocumentMoniker": "C:\\Users\\mateu\\AppData\\Roaming\\EXILED\\_dev\\-SCPSL-AudioManager-API\\AudioManagerAPI\\obj\\Release\\net48\\AudioManagerAPI.AssemblyInfo.cs",
-              "RelativeDocumentMoniker": "AudioManagerAPI\\obj\\Release\\net48\\AudioManagerAPI.AssemblyInfo.cs",
-              "ToolTip": "C:\\Users\\mateu\\AppData\\Roaming\\EXILED\\_dev\\-SCPSL-AudioManager-API\\AudioManagerAPI\\obj\\Release\\net48\\AudioManagerAPI.AssemblyInfo.cs",
-              "RelativeToolTip": "AudioManagerAPI\\obj\\Release\\net48\\AudioManagerAPI.AssemblyInfo.cs",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-07-21T16:24:58.562Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 7,
-              "Title": "ControllerIdManager.cs",
-              "DocumentMoniker": "C:\\Users\\mateu\\AppData\\Roaming\\EXILED\\_dev\\-SCPSL-AudioManager-API\\AudioManagerAPI\\Features\\Managment\\ControllerIdManager.cs",
-              "RelativeDocumentMoniker": "AudioManagerAPI\\Features\\Managment\\ControllerIdManager.cs",
-              "ToolTip": "C:\\Users\\mateu\\AppData\\Roaming\\EXILED\\_dev\\-SCPSL-AudioManager-API\\AudioManagerAPI\\Features\\Managment\\ControllerIdManager.cs",
-              "RelativeToolTip": "AudioManagerAPI\\Features\\Managment\\ControllerIdManager.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAsAAABOAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-07-21T16:58:21.004Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 10,
-              "Title": "IAudioManager.cs",
-              "DocumentMoniker": "C:\\Users\\mateu\\AppData\\Roaming\\EXILED\\_dev\\-SCPSL-AudioManager-API\\AudioManagerAPI\\Features\\Managment\\IAudioManager.cs",
-              "RelativeDocumentMoniker": "AudioManagerAPI\\Features\\Managment\\IAudioManager.cs",
-              "ToolTip": "C:\\Users\\mateu\\AppData\\Roaming\\EXILED\\_dev\\-SCPSL-AudioManager-API\\AudioManagerAPI\\Features\\Managment\\IAudioManager.cs",
-              "RelativeToolTip": "AudioManagerAPI\\Features\\Managment\\IAudioManager.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAADQAAAABAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-07-21T17:00:10.207Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 8,
-              "Title": "AudioCache.cs",
-              "DocumentMoniker": "C:\\Users\\mateu\\AppData\\Roaming\\EXILED\\_dev\\-SCPSL-AudioManager-API\\AudioManagerAPI\\Caching\\AudioCache.cs",
-              "RelativeDocumentMoniker": "AudioManagerAPI\\Caching\\AudioCache.cs",
-              "ToolTip": "C:\\Users\\mateu\\AppData\\Roaming\\EXILED\\_dev\\-SCPSL-AudioManager-API\\AudioManagerAPI\\Caching\\AudioCache.cs",
-              "RelativeToolTip": "AudioManagerAPI\\Caching\\AudioCache.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAABAAAAAtAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-07-21T17:06:04.701Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 9,
-              "Title": "ISpeakerFactory.cs",
-              "DocumentMoniker": "C:\\Users\\mateu\\AppData\\Roaming\\EXILED\\_dev\\-SCPSL-AudioManager-API\\AudioManagerAPI\\Features\\Speakers\\ISpeakerFactory.cs",
-              "RelativeDocumentMoniker": "AudioManagerAPI\\Features\\Speakers\\ISpeakerFactory.cs",
-              "ToolTip": "C:\\Users\\mateu\\AppData\\Roaming\\EXILED\\_dev\\-SCPSL-AudioManager-API\\AudioManagerAPI\\Features\\Speakers\\ISpeakerFactory.cs",
-              "RelativeToolTip": "AudioManagerAPI\\Features\\Speakers\\ISpeakerFactory.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAMAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-07-21T17:06:37.797Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 6,
-              "Title": "ISpeaker.cs",
-              "DocumentMoniker": "C:\\Users\\mateu\\AppData\\Roaming\\EXILED\\_dev\\-SCPSL-AudioManager-API\\AudioManagerAPI\\Features\\Speakers\\ISpeaker.cs",
-              "RelativeDocumentMoniker": "AudioManagerAPI\\Features\\Speakers\\ISpeaker.cs",
-              "ToolTip": "C:\\Users\\mateu\\AppData\\Roaming\\EXILED\\_dev\\-SCPSL-AudioManager-API\\AudioManagerAPI\\Features\\Speakers\\ISpeaker.cs",
-              "RelativeToolTip": "AudioManagerAPI\\Features\\Speakers\\ISpeaker.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAABcAAAAFAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-07-21T17:06:55.889Z"
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{aa2115a1-9712-457b-9047-dbb71ca2cdd2}"
             },
             {
               "$type": "Document",
@@ -183,48 +32,9 @@
               "RelativeDocumentMoniker": "AudioManagerAPI\\README.md",
               "ToolTip": "C:\\Users\\mateu\\AppData\\Roaming\\EXILED\\_dev\\-SCPSL-AudioManager-API\\AudioManagerAPI\\README.md",
               "RelativeToolTip": "AudioManagerAPI\\README.md",
-              "ViewState": "AgIAAE0AAAAAAAAAAAAewGMAAAAAAAAAAAAAAA==",
+              "ViewState": "AgIAADMAAAAAAAAAAAAAAC4AAAAIAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
-              "WhenOpened": "2025-07-21T17:08:33.295Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 2,
-              "Title": "LICENSE",
-              "DocumentMoniker": "C:\\Users\\mateu\\AppData\\Roaming\\EXILED\\_dev\\-SCPSL-AudioManager-API\\AudioManagerAPI\\LICENSE",
-              "RelativeDocumentMoniker": "AudioManagerAPI\\LICENSE",
-              "ToolTip": "C:\\Users\\mateu\\AppData\\Roaming\\EXILED\\_dev\\-SCPSL-AudioManager-API\\AudioManagerAPI\\LICENSE",
-              "RelativeToolTip": "AudioManagerAPI\\LICENSE",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAATAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
-              "WhenOpened": "2025-07-21T17:08:40.083Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 4,
-              "Title": "AudioManagerAPI.csproj",
-              "DocumentMoniker": "C:\\Users\\mateu\\AppData\\Roaming\\EXILED\\_dev\\-SCPSL-AudioManager-API\\AudioManagerAPI\\AudioManagerAPI.csproj",
-              "RelativeDocumentMoniker": "AudioManagerAPI\\AudioManagerAPI.csproj",
-              "ToolTip": "C:\\Users\\mateu\\AppData\\Roaming\\EXILED\\_dev\\-SCPSL-AudioManager-API\\AudioManagerAPI\\AudioManagerAPI.csproj",
-              "RelativeToolTip": "AudioManagerAPI\\AudioManagerAPI.csproj",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAADoAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000758|",
-              "WhenOpened": "2025-07-21T17:09:39.244Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 3,
-              "Title": "NuGet.Build.Tasks.Pack.targets",
-              "DocumentMoniker": "C:\\Program Files\\dotnet\\sdk\\9.0.302\\Sdks\\NuGet.Build.Tasks.Pack\\build\\NuGet.Build.Tasks.Pack.targets",
-              "RelativeDocumentMoniker": "..\\..\\..\\..\\..\\..\\..\\Program Files\\dotnet\\sdk\\9.0.302\\Sdks\\NuGet.Build.Tasks.Pack\\build\\NuGet.Build.Tasks.Pack.targets",
-              "ToolTip": "C:\\Program Files\\dotnet\\sdk\\9.0.302\\Sdks\\NuGet.Build.Tasks.Pack\\build\\NuGet.Build.Tasks.Pack.targets",
-              "RelativeToolTip": "..\\..\\..\\..\\..\\..\\..\\Program Files\\dotnet\\sdk\\9.0.302\\Sdks\\NuGet.Build.Tasks.Pack\\build\\NuGet.Build.Tasks.Pack.targets",
-              "ViewState": "AgIAAMUAAAAAAAAAAAAowNwAAAAEAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003801|",
-              "WhenOpened": "2025-07-21T17:17:54.236Z",
+              "WhenOpened": "2025-07-21T18:15:33.527Z",
               "EditorCaption": ""
             }
           ]
