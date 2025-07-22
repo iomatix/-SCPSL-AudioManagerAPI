@@ -71,6 +71,14 @@
         /// <param name="controllerId">The controller ID of the speaker.</param>
         /// <returns>The speaker instance, or <c>null</c> if not found.</returns>
         ISpeaker GetSpeaker(byte controllerId);
+
+        /// <summary>
+        /// Determines whether a given controller ID refers to a valid, active speaker.
+        /// </summary>
+        /// <param name="controllerId">The audio controller ID to validate.</param>
+        /// <returns><c>true</c> if the controller ID is valid; otherwise, <c>false</c>.</returns>
+        bool IsValidControllerId(byte controllerId);
+
     }
 
 }
