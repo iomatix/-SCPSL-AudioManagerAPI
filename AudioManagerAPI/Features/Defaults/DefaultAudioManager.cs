@@ -7,6 +7,16 @@
     /// Static entry point for a ready-to-use AudioManager wired up with
     /// the default LabAPI-based speaker implementation. Call RegisterDefaults()
     /// once at startup, then use the convenience methods for play/pause/resume/stop.
+    /// <example>
+    /// // Plugin startup
+    /// AudioManagerDefaults.RegisterDefaults();
+    ///
+    /// // anywhere in plugin code
+    /// byte id = AudioManagerDefaults.Play("explosionSound");
+    /// AudioManagerDefaults.Pause(id);
+    /// AudioManagerDefaults.Resume(id);
+    /// AudioManagerDefaults.Stop(id);
+    /// </example>
     /// </summary>
     public static class DefaultAudioManager
     {
