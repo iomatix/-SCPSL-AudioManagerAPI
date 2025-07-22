@@ -15,6 +15,10 @@
     <!-- Disable SDK’s auto‐generated AssemblyInfo → avoids duplicate [AssemblyFileVersion] -->
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
 
+    <!-- Attach docstrings -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+
     <!-- NuGet package on build -->
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <IsPackable>true</IsPackable>
@@ -62,6 +66,15 @@
       <Visible>true</Visible>
     </None>
   </ItemGroup>
+
+<ItemGroup>
+<None Include="$(OutputPath)\$(AssemblyName).xml">
+  <Pack>true</Pack>
+  <PackagePath>lib\net48\</PackagePath>
+</None>
+
+</ItemGroup>
+
 
   <ItemGroup>
     <PackageReference Include="Northwood.LabAPI" Version="1.1.0" />
