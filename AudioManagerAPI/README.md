@@ -25,7 +25,7 @@ A lightweight, reusable C# library for managing audio playback in SCP: Secret La
 Install the `SCPSL-AudioManagerAPI` package via NuGet:
 
 ```bash
-dotnet add package SCPSL-AudioManagerAPI --version 1.1.0
+dotnet add package SCPSL-AudioManagerAPI --version 1.2.0
 ```
 
 Or, in Visual Studio, use the NuGet Package Manager to search for `SCPSL-AudioManagerAPI`.
@@ -42,7 +42,7 @@ Example `.csproj` snippet:
     <TargetFramework>net48</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="SCPSL-AudioManagerAPI" Version="1.1.0" />
+    <PackageReference Include="SCPSL-AudioManagerAPI" Version="1.2.0" />
     <Reference Include="LabApi">
       <HintPath>path\to\LabApi.dll</HintPath>
     </Reference>
@@ -87,7 +87,29 @@ DefaultAudioManager.FadeOut(id, 2f); // Fade out and stop
 DefaultAudioManager.Stop(id); // Stop and destroy speaker
 ```
 
-### 2. Implement ISpeaker and ISpeakerFactory (Advanced)
+### 2. Extension Methods
+
+The `SpeakerExtensions` class provides extension methods for `ISpeaker` instances, allowing for easy configuration and lifecycle management.
+
+#### Configure
+
+The `Configure` method allows you to set the volume, minimum distance, maximum distance, and spatialization of a speaker, as well as apply custom configurations.
+
+```csharp
+speaker.Configure(volume: 0.8f, minDistance: 5f, maxDistance: 50f, isSpatial: true, configureSpeaker: customConfig);
+```
+
+#### StartAutoStop
+
+The `StartAutoStop` method initiates a coroutine that automatically stops and fades out the speaker after a specified lifespan.
+
+```csharp
+speaker.StartAutoStop(controllerId: 1, lifespan: 10f, autoCleanup: true, fadeOutAction: id => audioManager.FadeOutAudio(id, 2f));
+```
+
+These methods can be used in conjunction with the `AudioManager` or `DefaultAudioManager` to manage speakers more effectively.
+
+### 3. Implement ISpeaker and ISpeakerFactory (Advanced)
 
 For custom speaker implementations, create a class compatible with LabAPI's `SpeakerToy`.
 
@@ -225,7 +247,7 @@ public class LabApiSpeakerFactory : ISpeakerFactory
 }
 ```
 
-### 3. Initialize AudioManager (Advanced)
+### 4. Initialize AudioManager (Advanced)
 
 Create an instance of `AudioManager` for advanced control.
 
@@ -282,7 +304,7 @@ public class MyPluginAudioManager
 }
 ```
 
-### 4. Manage Speakers
+### 5. Manage Speakers
 
 Control audio playback with advanced features.
 
@@ -353,6 +375,19 @@ The `AudioCache` class processes WAV files with the following specifications:
 - **`IAudioManager.DestroySpeaker(byte controllerId)`**: Destroys a speaker and releases its ID.
 - **`IAudioManager.CleanupAllSpeakers()`**: Cleans up all active speakers and releases their IDs.
 - **`IAudioManager.GetSpeaker(byte controllerId)`**: Retrieves a speaker instance for further configuration.
+
+### Events
+
+The `IAudioManager` interface defines several events that can be subscribed to for tracking audio state changes:
+
+- `OnPlaybackStarted`: Invoked when a speaker begins playback.
+- `OnPaused`: Raised when playback is paused for a given controller ID.
+- `OnResumed`: Raised when previously paused audio resumes playback.
+- `OnStop`: Raised when audio playback is explicitly stopped for a given controller ID.
+- `OnSkipped`: Raised when audio skip logic is invoked for a specified controller ID.
+- `OnQueueEmpty`: Triggered when the audio queue for a speaker becomes empty.
+
+These events can be used to synchronize UI elements, manage state persistence, or trigger custom logic based on audio events.
 
 ## Notes
 
