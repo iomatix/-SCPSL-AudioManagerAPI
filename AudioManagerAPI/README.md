@@ -164,7 +164,7 @@ Use `IAudioManager` to play audio at specific positions, either locally or globa
 
   public void PlayScream(Vector3 position, Player targetPlayer)
   {
-      byte? controllerId = audioManager.PlayAudio("myplugin.scream", position, false, 
+      byte controllerId = audioManager.PlayAudio("myplugin.scream", position, false, 
           volume: 0.8f, minDistance: 5f, maxDistance: 50f, isSpatial: true, priority: AudioPriority.High, speaker =>
       {
           if (speaker is LabApiSpeaker labSpeaker)
@@ -173,7 +173,7 @@ Use `IAudioManager` to play audio at specific positions, either locally or globa
           }
       });
 
-      if (controllerId.HasValue)
+      if (controllerId != 0)
       {
           Log.Info($"Played scream with controller ID {controllerId.Value}.");
       }
@@ -184,9 +184,9 @@ Use `IAudioManager` to play audio at specific positions, either locally or globa
   ```csharp
   public void PlayGlobalScream(Vector3 position)
   {
-      byte? controllerId = audioManager.PlayGlobalAudio("myplugin.scream", position, false, 
+      byte controllerId = audioManager.PlayGlobalAudio("myplugin.scream", position, false, 
           volume: 0.8f, minDistance: 5f, maxDistance: 50f, isSpatial: true, priority: AudioPriority.High);
-      if (controllerId.HasValue)
+      if (controllerId != 0)
       {
           Log.Info($"Played global scream with controller ID {controllerId.Value}.");
       }
