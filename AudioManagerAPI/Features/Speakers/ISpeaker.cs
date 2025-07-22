@@ -1,16 +1,34 @@
-﻿namespace AudioManagerAPI.Features.Speakers
+﻿using System;
+using System.Collections.Generic;
+using System.Numerics;
+
+namespace AudioManagerAPI.Features.Speakers
 {
     /// <summary>
     /// Represents a speaker capable of playing audio samples at a specific position.
     /// </summary>
     public interface ISpeaker
     {
+
         /// <summary>
-        /// Plays the specified audio samples.
+        /// Occurs when the speaker's playback queue has finished processing all audio clips.
+        /// </summary>
+        /// <remarks>
+        /// Useful for triggering cleanup operations, transitioning to fallback content, or notifying systems  
+        /// that audio playback has completed without any queued items remaining.
+        /// </remarks>
+        event Action QueueEmpty;
+
+        /// <summary>
+        /// Plays the specified audio samples starting from the given playback position within the clip.
         /// </summary>
         /// <param name="samples">The PCM audio samples to play.</param>
-        /// <param name="loop">Whether the audio should loop.</param>
-        void Play(float[] samples, bool loop);
+        /// <param name="loop">Whether the audio should loop continuously.</param>
+        /// <param name="playbackPosition">
+        /// The starting playback position within the audio clip, in seconds or sample offset.
+        /// Use 0 to start from the beginning.
+        /// </param>
+        void Play(float[] samples, bool loop, float playbackPosition = 0f);
 
         /// <summary>
         /// Queues additional audio samples to play after the current ones.
@@ -50,7 +68,8 @@
         /// Fades out the audio volume over the specified duration and stops playback.
         /// </summary>
         /// <param name="duration">The duration of the fade-out in seconds.</param>
-        void FadeOut(float duration);
+        /// <param name="onComplete">An optional callback invoked after fade-out and stop are completed.</param>
+        void FadeOut(float duration, Action onComplete = null);
 
         /// <summary>
         /// Destroys the speaker, releasing all associated resources.
@@ -58,5 +77,3 @@
         void Destroy();
     }
 }
-
-

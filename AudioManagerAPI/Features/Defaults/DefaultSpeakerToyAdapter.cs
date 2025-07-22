@@ -2,11 +2,13 @@
 {
     using System;
     using System.Collections.Generic;
-    using UnityEngine;
     using MEC;
     using AudioManagerAPI.Features.Management;
     using AudioManagerAPI.Features.Speakers;
     using LabApi.Features.Wrappers;
+    using UnityEngine;
+
+    using Log = LabApi.Features.Console.Logger;
 
     /// <summary>
     /// Adapts LabAPI's <see cref="SpeakerToy"/> to the <see cref="ISpeakerWithPlayerFilter"/> interface,
@@ -16,34 +18,94 @@
     {
         private readonly SpeakerToy speakerToy;
         private float targetVolume;
+        private readonly Queue<(float[] samples, bool loop)> audioQueue = new Queue<(float[] samples, bool loop)>();
+        private bool isPlaying;
+        private float playbackPosition;
+        private float[] currentSamples;
+        private float sampleRate;
+
+        public event Action QueueEmpty;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="DefaultSpeakerToyAdapter"/> class.
         /// </summary>
         /// <param name="position">The 3D world position for audio playback.</param>
-        /// <param name="controllerId">The unique controller ID allocated by AudioManager.</param>
-        public DefaultSpeakerToyAdapter(Vector3 position, byte controllerId)
+        public DefaultSpeakerToyAdapter(SpeakerToy speakerToy)
         {
-            speakerToy = SpeakerToy.Create(position, networkSpawn: true);
-            if (speakerToy != null)
-            {
-                speakerToy.ControllerId = controllerId;
-                targetVolume = 1f;
-            }
+            this.speakerToy = speakerToy ?? throw new ArgumentNullException(nameof(speakerToy));
+            targetVolume = 1f;
+            isPlaying = false;
+            playbackPosition = 0f;
+            sampleRate = 48000f;
         }
+
 
         /// <summary>
         /// Plays the provided audio samples with the specified looping behavior.
         /// </summary>
         /// <param name="samples">The audio samples to play.</param>
         /// <param name="loop">Whether the audio should loop.</param>
-        public void Play(float[] samples, bool loop)
+        /// <param name="playbackPosition">The starting position in seconds.</param>
+        public void Play(float[] samples, bool loop, float playbackPosition = 0f)
         {
-            if (speakerToy != null)
+            var transmitter = SpeakerToy.GetTransmitter(speakerToy.ControllerId);
+            if (transmitter == null)
             {
-                var transmitter = SpeakerToy.GetTransmitter(speakerToy.ControllerId);
-                transmitter?.Play(samples, queue: false, loop: loop);
-                SetVolume(targetVolume); // Ensure volume is applied
+                Log.Warn($"[AudioManagerAPI] No transmitter found for SpeakerToy with ControllerId {speakerToy.ControllerId}.");
+                return;
+            }
+
+            // Store current samples and position
+            this.currentSamples = samples;
+            this.playbackPosition = playbackPosition;
+
+            // Convert playbackPosition (seconds) to sample index
+            int sampleIndex = Mathf.FloorToInt(playbackPosition * sampleRate);
+            float[] adjustedSamples = samples;
+
+            // If playbackPosition is non-zero, slice the samples array
+            if (sampleIndex > 0 && sampleIndex < samples.Length)
+            {
+                adjustedSamples = new float[samples.Length - sampleIndex];
+                Array.Copy(samples, sampleIndex, adjustedSamples, 0, adjustedSamples.Length);
+            }
+            else if (sampleIndex >= samples.Length)
+            {
+                Log.Warn($"[AudioManagerAPI] Playback position {playbackPosition}s exceeds sample length for ControllerId {speakerToy.ControllerId}.");
+                adjustedSamples = Array.Empty<float>();
+                isPlaying = false;
+                CheckQueue();
+                return;
+            }
+
+            // Play adjusted samples
+            transmitter.Play(adjustedSamples, queue: false, loop: loop);
+            SetVolume(targetVolume);
+            isPlaying = true;
+
+            // Start coroutine to update playback position
+            Timing.RunCoroutine(UpdatePlaybackPosition());
+
+            CheckQueue();
+        }
+
+        /// <summary>
+        /// Gets the current playback position in seconds.
+        /// </summary>
+        public float GetPlaybackPosition()
+        {
+            return playbackPosition;
+        }
+
+        /// <summary>
+        /// Updates the playback position while the audio is playing.
+        /// </summary>
+        private IEnumerator<float> UpdatePlaybackPosition()
+        {
+            while (isPlaying)
+            {
+                playbackPosition += Timing.DeltaTime;
+                yield return Timing.WaitForOneFrame;
             }
         }
 
@@ -54,31 +116,31 @@
         /// <param name="loop">Whether the audio should loop.</param>
         public void Queue(float[] samples, bool loop)
         {
-            if (speakerToy != null)
-            {
-                var transmitter = SpeakerToy.GetTransmitter(speakerToy.ControllerId);
-                transmitter?.Play(samples, queue: true, loop: loop);
-            }
+            audioQueue?.Enqueue((samples, loop));
+            CheckQueue();
         }
+
 
         /// <summary>
         /// Stops the current audio playback.
         /// </summary>
         public void Stop()
         {
-            if (speakerToy != null)
-            {
-                var transmitter = SpeakerToy.GetTransmitter(speakerToy.ControllerId);
-                transmitter?.Stop();
-            }
+            var transmitter = SpeakerToy.GetTransmitter(speakerToy.ControllerId);
+            transmitter?.Stop();
+            audioQueue.Clear();
+            isPlaying = false;
         }
 
         /// <summary>
         /// Destroys the speaker and releases its resources.
         /// </summary>
+
         public void Destroy()
         {
             speakerToy?.Destroy();
+            audioQueue.Clear();
+            isPlaying = false;
         }
 
 
@@ -87,11 +149,8 @@
         /// </summary>
         public void Pause()
         {
-            if (speakerToy != null)
-            {
-                var transmitter = SpeakerToy.GetTransmitter(speakerToy.ControllerId);
-                transmitter?.Pause();
-            }
+            var transmitter = SpeakerToy.GetTransmitter(speakerToy.ControllerId);
+            transmitter?.Pause();
         }
 
         /// <summary>
@@ -99,11 +158,8 @@
         /// </summary>
         public void Resume()
         {
-            if (speakerToy != null)
-            {
-                var transmitter = SpeakerToy.GetTransmitter(speakerToy.ControllerId);
-                transmitter?.Resume();
-            }
+            var transmitter = SpeakerToy.GetTransmitter(speakerToy.ControllerId);
+            transmitter?.Resume();
         }
 
         /// <summary>
@@ -111,11 +167,14 @@
         /// </summary>
         public void Skip(int count)
         {
-            if (speakerToy != null)
+            var transmitter = SpeakerToy.GetTransmitter(speakerToy.ControllerId);
+            transmitter?.Skip(count);
+            while (count > 0 && audioQueue.Count > 0)
             {
-                var transmitter = SpeakerToy.GetTransmitter(speakerToy.ControllerId);
-                transmitter?.Skip(count);
+                audioQueue.Dequeue();
+                count--;
             }
+            CheckQueue();
         }
 
         /// <summary>
@@ -124,7 +183,7 @@
         /// <param name="duration">The duration of the effect in seconds.</param>
         public void FadeIn(float duration)
         {
-            if (speakerToy != null && duration > 0)
+            if (duration > 0)
             {
                 Timing.RunCoroutine(FadeVolume(0f, targetVolume, duration));
             }
@@ -134,11 +193,16 @@
         /// Fades out for specified duration.
         /// </summary>
         /// <param name="duration">The duration of the effect in seconds.</param>
-        public void FadeOut(float duration)
+        public void FadeOut(float duration, Action onComplete = null)
         {
-            if (speakerToy != null && duration > 0)
+            if (duration > 0)
             {
-                Timing.RunCoroutine(FadeVolume(speakerToy.Volume, 0f, duration, stopOnComplete: true));
+                Timing.RunCoroutine(FadeVolume(speakerToy.Volume, 0f, duration, stopOnComplete: true, onComplete));
+            }
+            else
+            {
+                Stop();
+                onComplete?.Invoke();
             }
         }
 
@@ -154,13 +218,10 @@
         /// <param name="playerFilter">A filter expression that determines which players are valid.</param>
         public void SetValidPlayers(Func<Player, bool> playerFilter)
         {
-            if (speakerToy != null)
+            var transmitter = SpeakerToy.GetTransmitter(speakerToy.ControllerId);
+            if (transmitter != null)
             {
-                var transmitter = SpeakerToy.GetTransmitter(speakerToy.ControllerId);
-                if (transmitter != null)
-                {
-                    transmitter.ValidPlayers = playerFilter as Func<Player, bool>;
-                }
+                transmitter.ValidPlayers = playerFilter;
             }
         }
 
@@ -174,11 +235,10 @@
         /// </param>
         public void SetVolume(float volume)
         {
-            if (speakerToy != null)
-            {
-                speakerToy.Volume = Mathf.Clamp01(volume);
-            }
+            speakerToy.Volume = Mathf.Clamp01(volume);
+            targetVolume = speakerToy.Volume;
         }
+
 
         /// <summary>
         /// Sets the minimum distance at which the audio starts to attenuate.
@@ -189,11 +249,10 @@
         /// </param>
         public void SetMinDistance(float minDistance)
         {
-            if (speakerToy != null)
-            {
-                speakerToy.MinDistance = Mathf.Max(0, minDistance);
-            }
+            speakerToy.MinDistance = Mathf.Max(0, minDistance);
         }
+
+
 
         /// <summary>
         /// Sets the maximum distance beyond which the audio is no longer audible.
@@ -204,10 +263,7 @@
         /// </param>
         public void SetMaxDistance(float maxDistance)
         {
-            if (speakerToy != null)
-            {
-                speakerToy.MaxDistance = Mathf.Max(0, maxDistance);
-            }
+            speakerToy.MaxDistance = Mathf.Max(0, maxDistance);
         }
 
         /// <summary>
@@ -217,11 +273,28 @@
         /// <param name="isSpatial">
         /// If <c>true</c>, enables spatial audio; if <c>false</c>, plays audio in a non-spatial (2D) context.
         /// </param>
-        public void SetSpatialization(bool isSpatial = true)
+        public void SetSpatialization(bool isSpatial)
         {
-            if (speakerToy != null)
+            speakerToy.IsSpatial = isSpatial;
+        }
+
+        /// <summary>
+        /// Evaluates the current playback queue and initiates playback of the next clip if available.
+        /// </summary>
+        /// <remarks>
+        /// If no audio is currently playing and queued samples are present, the next item is dequeued and played.  
+        /// If the queue is empty and playback is idle, triggers the <see cref="QueueEmpty"/> event to signal queue completion.
+        /// </remarks>
+        private void CheckQueue()
+        {
+            if (!isPlaying && audioQueue.Count > 0)
             {
-                speakerToy.IsSpatial = isSpatial;
+                var (samples, loop) = audioQueue.Dequeue();
+                Play(samples, loop);
+            }
+            else if (!isPlaying && audioQueue.Count == 0)
+            {
+                QueueEmpty?.Invoke();
             }
         }
 
@@ -244,7 +317,7 @@
         /// Timing.RunCoroutine(FadeVolume(1.0f, 0.0f, 3.5f, true));
         /// </code>
         /// </remarks>
-        public IEnumerator<float> FadeVolume(float startVolume, float endVolume, float duration, bool stopOnComplete = false)
+        private IEnumerator<float> FadeVolume(float startVolume, float endVolume, float duration, bool stopOnComplete = false, Action onComplete = null)
         {
             float elapsed = 0f;
             while (elapsed < duration)
@@ -259,6 +332,7 @@
             {
                 Stop();
             }
+            onComplete?.Invoke();
         }
     }
 }

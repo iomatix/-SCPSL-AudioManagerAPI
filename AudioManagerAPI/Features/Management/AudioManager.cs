@@ -2,9 +2,13 @@
 {
     using AudioManagerAPI.Cache;
     using AudioManagerAPI.Controllers;
+    using AudioManagerAPI.Defaults;
     using AudioManagerAPI.Features.Enums;
     using AudioManagerAPI.Features.Speakers;
+    using AudioManagerAPI.Speakers.Extensions;
+    using AudioManagerAPI.Speakers.State;
     using LabApi.Features.Wrappers;
+    using MEC;
     using System;
     using System.Collections.Generic;
     using System.IO;
@@ -16,13 +20,20 @@
     /// <summary>
     /// Implements audio management with speaker lifecycle and caching for game audio playback.
     /// </summary>
-    public class AudioManager : IAudioManager
+    public partial class AudioManager : IAudioManager
     {
         private readonly Dictionary<byte, ISpeaker> speakers = new Dictionary<byte, ISpeaker>();
         private readonly AudioCache audioCache;
         private readonly ISpeakerFactory speakerFactory;
         private readonly object lockObject = new object();
         private const float DEFAULT_FADE_DURATION = 1f;
+
+        public event Action<byte> OnPlaybackStarted;
+        public event Action<byte> OnPaused;
+        public event Action<byte> OnResumed;
+        public event Action<byte> OnStop;
+        public event Action<byte, int> OnSkipped;
+        public event Action<byte> OnQueueEmpty;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="AudioManager"/> class.
@@ -39,40 +50,21 @@
             this.audioCache = new AudioCache(cacheSize);
         }
 
-        /// <summary>
-        /// Registers an audio stream provider for a given key.
-        /// </summary>
-        /// <param name="key">The unique key for the audio.</param>
-        /// <param name="streamProvider">A function that provides the audio stream.</param>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="key"/> or <paramref name="streamProvider"/> is null.</exception>
         public void RegisterAudio(string key, Func<Stream> streamProvider)
         {
-            if (key == null)
-                throw new ArgumentNullException(nameof(key));
-            if (streamProvider == null)
-                throw new ArgumentNullException(nameof(streamProvider));
+            if (key == null) throw new ArgumentNullException(nameof(key));
+            if (streamProvider == null) throw new ArgumentNullException(nameof(streamProvider));
             audioCache.Register(key, streamProvider);
         }
 
-        /// <summary>
-        /// Retrieves the speaker instance for the specified controller ID.
-        /// </summary>
-        /// <param name="controllerId">The controller ID of the speaker.</param>
-        /// <returns>The speaker instance, or <c>null</c> if not found.</returns>
         public ISpeaker GetSpeaker(byte controllerId)
         {
             lock (lockObject)
             {
-                speakers.TryGetValue(controllerId, out ISpeaker speaker);
-                return speaker;
+                return speakers.TryGetValue(controllerId, out var speaker) ? speaker : null;
             }
         }
 
-        /// <summary>
-        /// Determines whether a given controller ID refers to a valid, active speaker.
-        /// </summary>
-        /// <param name="controllerId">The controller ID to validate.</param>
-        /// <returns><c>true</c> if the controller ID is valid; otherwise, <c>false</c>.</returns>
         public bool IsValidController(byte controllerId)
         {
             lock (lockObject)
@@ -81,24 +73,7 @@
             }
         }
 
-        /// <summary>
-        /// Plays audio at the specified position with optional configuration.
-        /// </summary>
-        /// <param name="key">The key identifying the audio to play.</param>
-        /// <param name="position">The 3D position for playback.</param>
-        /// <param name="loop">Whether the audio should loop.</param>
-        /// <param name="volume">The volume level (0.0 to 1.0).</param>
-        /// <param name="minDistance">The minimum distance where audio starts to fall off.</param>
-        /// <param name="maxDistance">The maximum distance where audio falls to zero.</param>
-        /// <param name="isSpatial">
-        /// If <c>true</c>, enables 3D spatial audio (distance-based attenuation).
-        /// If <c>false</c>, plays the clip globally without attenuation.
-        /// </param>
-        /// <param name="priority">The priority of the audio.</param>
-        /// <param name="configureSpeaker">An optional action to configure the speaker before playback.</param>
-        /// <param name="queue">Whether to queue the audio instead of playing immediately.</param>
-        /// <returns>The controller ID of the speaker, or 0 if playback fails.</returns>
-        public byte PlayAudio(string key, Vector3 position, bool loop, float volume, float minDistance, float maxDistance, bool isSpatial, AudioPriority priority, Action<ISpeaker> configureSpeaker = null, bool queue = false)
+        public byte PlayAudio(string key, Vector3 position, bool loop, float volume, float minDistance, float maxDistance, bool isSpatial, AudioPriority priority, Action<ISpeaker> configureSpeaker = null, bool queue = false, bool persistent = false, float? lifespan = null, bool autoCleanup = false)
         {
             lock (lockObject)
             {
@@ -109,20 +84,39 @@
                     return 0;
                 }
 
-                byte controllerId = ControllerIdManager.AllocateId(
+                var state = new SpeakerState
+                {
+                    Key = key,
+                    Position = position,
+                    Loop = loop,
+                    Volume = volume,
+                    MinDistance = minDistance,
+                    MaxDistance = maxDistance,
+                    IsSpatial = isSpatial,
+                    Priority = priority,
+                    ConfigureSpeaker = configureSpeaker,
+                    Queue = queue,
+                    Persistent = persistent,
+                    Lifespan = lifespan,
+                    AutoCleanup = autoCleanup,
+                    PlaybackPosition = 0f
+                };
+
+                byte controllerId = 0;
+                ControllerIdManager.AllocateId(
                     priority,
-                    stopCallback: null, // Temporarily null to avoid capturing unassigned controllerId
-                    onSuccess: id => { },
-                    onFailure: () => Log.Warn($"[AudioManagerAPI] Failed to allocate controller ID for audio {key}.")
+                    null, // Temporarily pass null for stopCallback
+                    persistent,
+                    persistent ? state : null,
+                    id =>
+                    {
+                        controllerId = id;
+                        ControllerIdManager.UpdateStopCallback(id, () => FadeOutAudio(id, DEFAULT_FADE_DURATION));
+                    },
+                    () => Log.Warn($"[AudioManagerAPI] Failed to allocate controller ID for audio {key}.")
                 );
 
-                if (controllerId == 0)
-                {
-                    return 0;
-                }
-
-                // Assign stopCallback after controllerId is assigned
-                ControllerIdManager.UpdateStopCallback(controllerId, () => FadeOutAudio(controllerId, DEFAULT_FADE_DURATION));
+                if (controllerId == 0) return 0;
 
                 ISpeaker speaker = speakerFactory.CreateSpeaker(position, controllerId);
                 if (speaker == null)
@@ -132,15 +126,7 @@
                     return 0;
                 }
 
-                if (speaker is ISpeakerWithPlayerFilter playerFilterSpeaker)
-                {
-                    playerFilterSpeaker.SetVolume(volume);
-                    playerFilterSpeaker.SetMinDistance(minDistance);
-                    playerFilterSpeaker.SetMaxDistance(maxDistance);
-                    playerFilterSpeaker.SetSpatialization(isSpatial);
-                    configureSpeaker?.Invoke(speaker);
-                }
-
+                speaker.Configure(volume, minDistance, maxDistance, isSpatial, configureSpeaker);
                 speakers[controllerId] = speaker;
 
                 if (queue)
@@ -150,31 +136,38 @@
                 else
                 {
                     speaker.Play(samples, loop);
+                    OnPlaybackStarted?.Invoke(controllerId);
+                }
+
+                if (autoCleanup)
+                {
+                    speaker.QueueEmpty += () =>
+                    {
+                        FadeOutAudio(controllerId, DEFAULT_FADE_DURATION);
+                        OnQueueEmpty?.Invoke(controllerId);
+                    };
+                }
+
+                if (autoCleanup || lifespan.HasValue)
+                {
+                    speaker.StartAutoStop(controllerId, lifespan ?? float.MaxValue, autoCleanup, id => FadeOutAudio(id, DEFAULT_FADE_DURATION));
                 }
 
                 return controllerId;
             }
         }
 
-        /// <summary>
-        /// Plays audio globally, audible to all ready players.
-        /// </summary>
-        /// <param name="key">The key identifying the audio to play.</param>
-        /// <param name="loop">Whether the audio should loop.</param>
-        /// <param name="volume">The volume level (0.0 to 1.0).</param>
-        /// <param name="priority">The priority of the audio.</param>
-        /// <param name="queue">Whether to queue the audio instead of playing immediately.</param>
-        /// <param name="fadeInDuration">The duration of the fade-in effect in seconds (0 for no fade).</param>
-        /// <returns>The controller ID of the speaker, or 0 if playback fails.</returns>
-        public byte PlayGlobalAudio(string key, bool loop, float volume, AudioPriority priority, bool queue = false, float fadeInDuration = 0f)
+        public byte PlayGlobalAudio(string key, bool loop, float volume, AudioPriority priority, bool queue = false, float fadeInDuration = 0f, bool persistent = false, float? lifespan = null, bool autoCleanup = false)
         {
-            byte controllerId = PlayAudio(key, Vector3.zero, loop, volume, 0f, 999.99f, false, priority, speaker =>
-            {
-                if (speaker is ISpeakerWithPlayerFilter playerFilterSpeaker)
+            byte controllerId = PlayAudio(
+                key, Vector3.zero, loop, volume, 0f, 999.99f, false, priority,
+                speaker =>
                 {
-                    playerFilterSpeaker.SetValidPlayers(p => Player.ReadyList.Contains(p));
-                }
-            }, queue);
+                    if (speaker is ISpeakerWithPlayerFilter filterSpeaker)
+                    {
+                        filterSpeaker.SetValidPlayers(p => Player.ReadyList.Contains(p));
+                    }
+                }, queue, persistent, lifespan, autoCleanup);
 
             if (controllerId != 0 && fadeInDuration > 0)
             {
@@ -184,56 +177,99 @@
             return controllerId;
         }
 
-        /// <summary>
-        /// Stops the audio associated with the specified controller ID.
-        /// </summary>
-        /// <param name="controllerId">The controller ID of the speaker to stop.</param>
+        public bool RecoverSpeaker(byte controllerId, bool resetPlayback = false)
+        {
+            lock (lockObject)
+            {
+                var state = ControllerIdManager.GetSpeakerState(controllerId) as SpeakerState;
+                if (state == null || !state.Persistent)
+                {
+                    Log.Warn($"[AudioManagerAPI] Cannot recover speaker with ID {controllerId}: Not persistent or state not found.");
+                    return false;
+                }
+
+                byte newId = 0;
+                ControllerIdManager.AllocateId(
+                    state.Priority,
+                    null, // Temporarily pass null for stopCallback
+                    true,
+                    state,
+                    id =>
+                    {
+                        newId = id;
+                        ControllerIdManager.UpdateStopCallback(id, () => FadeOutAudio(id, DEFAULT_FADE_DURATION));
+                    },
+                    () => Log.Warn($"[AudioManagerAPI] Failed to allocate new ID for recovering speaker {controllerId}.")
+                );
+
+                if (newId == 0) return false;
+
+                ISpeaker speaker = speakerFactory.CreateSpeaker(state.Position, newId);
+                if (speaker == null)
+                {
+                    ControllerIdManager.ReleaseId(newId);
+                    Log.Warn($"[AudioManagerAPI] Failed to create speaker for recovering ID {controllerId}.");
+                    return false;
+                }
+
+                speaker.Configure(state.Volume, state.MinDistance, state.MaxDistance, state.IsSpatial, state.ConfigureSpeaker);
+                speakers[newId] = speaker;
+
+                float[] samples = audioCache.Get(state.Key);
+                if (samples != null)
+                {
+                    if (resetPlayback) state.PlaybackPosition = 0f;
+                    if (state.Queue) speaker.Queue(samples, state.Loop);
+                    else speaker.Play(samples, state.Loop, state.PlaybackPosition);
+                }
+
+                if (state.AutoCleanup || state.Lifespan.HasValue)
+                {
+                    speaker.StartAutoStop(newId, state.Lifespan ?? float.MaxValue, state.AutoCleanup, id => FadeOutAudio(id, DEFAULT_FADE_DURATION));
+                }
+
+                Log.Debug($"[AudioManagerAPI] Recovered persistent speaker ID {controllerId} as {newId} at {Timing.LocalTime}.");
+                return true;
+            }
+        }
+
         public void StopAudio(byte controllerId)
         {
             lock (lockObject)
             {
-                if (speakers.TryGetValue(controllerId, out ISpeaker speaker))
+                if (speakers.TryGetValue(controllerId, out var speaker))
                 {
                     speaker.Stop();
+                    OnStop?.Invoke(controllerId);
                 }
             }
         }
 
-        /// <summary>
-        /// Pauses the audio associated with the specified controller ID.
-        /// </summary>
-        /// <param name="controllerId">The controller ID of the speaker to pause.</param>
         public void PauseAudio(byte controllerId)
         {
             lock (lockObject)
             {
-                if (speakers.TryGetValue(controllerId, out ISpeaker speaker))
+                if (speakers.TryGetValue(controllerId, out var speaker))
                 {
                     speaker.Pause();
+                    OnPaused?.Invoke(controllerId);
                 }
             }
         }
 
-        /// <summary>
-        /// Resumes paused audio associated with the specified controller ID.
-        /// </summary>
-        /// <param name="controllerId">The controller ID of the speaker to resume.</param>
         public void ResumeAudio(byte controllerId)
         {
             lock (lockObject)
             {
-                if (speakers.TryGetValue(controllerId, out ISpeaker speaker))
+                if (speakers.TryGetValue(controllerId, out var speaker))
                 {
                     speaker.Resume();
+                    OnResumed?.Invoke(controllerId);
                 }
             }
         }
 
-        /// <summary>
-        /// Skips the current or queued audio clips for the specified controller ID.
-        /// </summary>
-        /// <param name="controllerId">The controller ID of the speaker to skip audio for.</param>
-        /// <param name="count">The number of clips to skip, including the current one.</param>
+
         public void SkipAudio(byte controllerId, int count)
         {
             lock (lockObject)
@@ -241,15 +277,11 @@
                 if (speakers.TryGetValue(controllerId, out ISpeaker speaker))
                 {
                     speaker.Skip(count);
+                    OnSkipped?.Invoke(controllerId, count);
                 }
             }
         }
 
-        /// <summary>
-        /// Fades in audio associated with the specified controller ID over the specified duration.
-        /// </summary>
-        /// <param name="controllerId">The controller ID of the speaker to fade in.</param>
-        /// <param name="duration">The duration of the fade-in effect in seconds.</param>
         public void FadeInAudio(byte controllerId, float duration)
         {
             lock (lockObject)
@@ -261,50 +293,46 @@
             }
         }
 
-        /// <summary>
-        /// Fades out audio associated with the specified controller ID over the specified duration.
-        /// </summary>
-        /// <param name="controllerId">The controller ID of the speaker to fade out.</param>
-        /// <param name="duration">The duration of the fade-out effect in seconds.</param>
         public void FadeOutAudio(byte controllerId, float duration)
         {
             lock (lockObject)
             {
-                if (speakers.TryGetValue(controllerId, out ISpeaker speaker))
+                if (speakers.TryGetValue(controllerId, out var speaker))
                 {
-                    speaker.FadeOut(duration);
+                    if (speaker is DefaultSpeakerToyAdapter adapter && ControllerIdManager.GetSpeakerState(controllerId) is SpeakerState state && state.Persistent)
+                    {
+                        state.PlaybackPosition = adapter.GetPlaybackPosition();
+                    }
+                    speaker.FadeOut(duration, () =>
+                    {
+                        speakers.Remove(controllerId);
+                        ControllerIdManager.ReleaseId(controllerId);
+                    });
                 }
             }
         }
 
-        /// <summary>
-        /// Destroys the speaker with the specified controller ID and releases its ID.
-        /// </summary>
-        /// <param name="controllerId">The controller ID of the speaker to destroy.</param>
-        public void DestroySpeaker(byte controllerId)
+        public void DestroySpeaker(byte controllerId, bool forceRemoveState = false)
         {
             lock (lockObject)
             {
-                if (speakers.TryGetValue(controllerId, out ISpeaker speaker))
+                if (speakers.TryGetValue(controllerId, out var speaker))
                 {
                     speaker.Stop();
                     speaker.Destroy();
                     speakers.Remove(controllerId);
-                    ControllerIdManager.ReleaseId(controllerId);
+                    ControllerIdManager.ReleaseId(controllerId, forceRemoveState);
                 }
             }
         }
 
-        /// <summary>
-        /// Cleans up all active speakers and releases their controller IDs.
-        /// </summary>
         public void CleanupAllSpeakers()
         {
             lock (lockObject)
             {
-                foreach (byte controllerId in new List<byte>(speakers.Keys))
+                foreach (var controllerId in new List<byte>(speakers.Keys))
                 {
-                    if (speakers.TryGetValue(controllerId, out ISpeaker speaker))
+                    if (speakers.TryGetValue(controllerId, out var speaker))
                     {
                         speaker.Stop();
                         speaker.Destroy();
@@ -312,6 +340,7 @@
                     }
                 }
                 speakers.Clear();
+                ControllerIdManager.CleanupEvictedSpeakers();
             }
         }
     }

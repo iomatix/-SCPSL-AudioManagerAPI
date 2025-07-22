@@ -1,6 +1,7 @@
 ﻿namespace AudioManagerAPI.Defaults
 {
     using AudioManagerAPI.Features.Speakers;
+    using LabApi.Features.Wrappers;
     using UnityEngine;
 
     /// <summary>
@@ -8,6 +9,7 @@
     /// </summary>
     public class DefaultSpeakerFactory : ISpeakerFactory
     {
+
         /// <summary>
         /// Creates a new speaker adapter for the specified position and controller ID.
         /// </summary>
@@ -16,7 +18,10 @@
         /// <returns>An <see cref="ISpeaker"/> instance with pause/resume support.</returns>
         public ISpeaker CreateSpeaker(Vector3 position, byte controllerId)
         {
-            return new DefaultSpeakerToyAdapter(position, controllerId);
+            SpeakerToy speaker = SpeakerToy.Create(position, networkSpawn: true);
+            if (speaker == null) return null;
+            speaker.ControllerId = controllerId;
+            return new DefaultSpeakerToyAdapter(speaker);
         }
     }
 }
