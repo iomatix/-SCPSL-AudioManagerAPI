@@ -1,7 +1,8 @@
 ﻿namespace AudioManagerAPI.Defaults
 {
     using AudioManagerAPI.Features.Speakers;
- 
+    using UnityEngine;
+
     /// <summary>
     /// Default factory that produces <see cref="DefaultSpeakerToyAdapter"/> instances.
     /// </summary>
@@ -18,5 +19,4 @@
             return new DefaultSpeakerToyAdapter(position, controllerId);
         }
     }
-}
 }

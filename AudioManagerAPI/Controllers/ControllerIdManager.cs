@@ -3,114 +3,92 @@
     using System;
     using System.Collections.Generic;
     using System.Linq;
-    using AudioManagerAPI.Features.Enums;
     using MEC;
+    using AudioManagerAPI.Features.Enums;
+
+    using Log = LabApi.Features.Console.Logger;
 
     /// <summary>
-    /// Manages a shared pool of controller IDs for audio speakers across all plugins to prevent ID conflicts.
+    /// Manages audio controller IDs with priority-based allocation and eviction.
     /// </summary>
     public static class ControllerIdManager
     {
-        
-        private static readonly HashSet<byte> availableIds = new HashSet<byte>();
-        private static readonly Dictionary<byte, AudioPriority> idPriorities = new Dictionary<byte, AudioPriority>();
-        private static readonly Dictionary<byte, Action> stopCallbacks = new Dictionary<byte, Action>();
-        private static readonly List<(AudioPriority priority, Action<byte> onSuccess, Action onFailure)> queuedRequests = new List<(AudioPriority priority, Action<byte> onSuccess, Action onFailure)>();
+        private static readonly byte[] availableIds = new byte[255];
+        private static readonly Dictionary<byte, (AudioPriority priority, Action stopCallback)> controllerPriorities = new Dictionary<byte, (AudioPriority, Action)>();
         private static readonly object lockObject = new object();
 
-        /// <summary>
-        /// Initializes the controller ID manager with a default range of IDs.
-        /// </summary>
         static ControllerIdManager()
         {
-            for (byte i = 1; i <= 255; i++)
+            for (byte i = 1; i <= 254; i++)
             {
-                availableIds.Add(i);
+                availableIds[i - 1] = i;
             }
         }
 
         /// <summary>
-        /// Allocates a unique controller ID from the shared pool, evicting a lower-priority speaker or queuing the request if necessary.
+        /// Allocates a controller ID for audio playback based on priority.
         /// </summary>
-        /// <param name="priority">The priority of the requesting audio.</param>
-        /// <param name="stopCallback">Callback to stop the speaker if it is evicted later.</param>
-        /// <param name="onSuccess">Callback to invoke with the allocated ID.</param>
-        /// <param name="onFailure">Callback to invoke if allocation fails.</param>
+        /// <param name="priority">The priority of the audio.</param>
+        /// <param name="stopCallback">The callback to execute when the audio is stopped or evicted.</param>
+        /// <param name="onSuccess">The callback to execute when allocation succeeds, passing the allocated ID.</param>
+        /// <param name="onFailure">The callback to execute when allocation fails.</param>
         /// <returns>The allocated controller ID, or 0 if allocation fails.</returns>
         public static byte AllocateId(AudioPriority priority, Action stopCallback, Action<byte> onSuccess, Action onFailure)
         {
             lock (lockObject)
             {
-                if (availableIds.Count > 0)
+                byte controllerId = availableIds.FirstOrDefault(id => !controllerPriorities.ContainsKey(id));
+                if (controllerId == 0)
                 {
-                    byte id = availableIds.First();
-                    availableIds.Remove(id);
-                    idPriorities[id] = priority;
-                    stopCallbacks[id] = stopCallback;
-                    onSuccess(id);
-                    return id;
+                    var lowestPriority = controllerPriorities.OrderBy(p => p.Value.priority).FirstOrDefault();
+                    if (lowestPriority.Key == 0 || lowestPriority.Value.priority >= priority)
+                    {
+                        onFailure?.Invoke();
+                        return 0;
+                    }
+
+                    lowestPriority.Value.stopCallback?.Invoke();
+                    controllerPriorities.Remove(lowestPriority.Key);
+                    controllerId = lowestPriority.Key;
                 }
 
-                // Try to evict a lower-priority speaker
-                var lowerPriorityId = idPriorities
-                    .Where(kvp => kvp.Value < priority)
-                    .OrderBy(kvp => kvp.Value)
-                    .Select(kvp => kvp.Key)
-                    .FirstOrDefault();
-
-                if (lowerPriorityId != 0)
-                {
-                    stopCallbacks[lowerPriorityId]?.Invoke();
-                    idPriorities.Remove(lowerPriorityId);
-                    stopCallbacks.Remove(lowerPriorityId);
-                    idPriorities[lowerPriorityId] = priority;
-                    stopCallbacks[lowerPriorityId] = stopCallback;
-                    onSuccess(lowerPriorityId);
-                    return lowerPriorityId;
-                }
-
-                // Queue high-priority requests
-                if (priority == AudioPriority.High)
-                {
-                    queuedRequests.Add((priority, onSuccess, onFailure));
-                    Timing.CallDelayed(0.5f, TryProcessQueue);
-                    return 0;
-                }
-
-                onFailure();
-                return 0;
+                controllerPriorities[controllerId] = (priority, stopCallback);
+                onSuccess?.Invoke(controllerId);
+                Log.Debug($"[AudioManagerAPI] Allocated controller ID {controllerId} with priority {priority} at {Timing.LocalTime}.");
+                return controllerId;
             }
         }
 
         /// <summary>
-        /// Releases a controller ID back to the shared pool and processes queued requests.
+        /// Updates the stop callback for an existing controller ID.
         /// </summary>
-        /// <param name="id">The controller ID to release.</param>
-        public static void ReleaseId(byte id)
+        /// <param name="controllerId">The controller ID to update.</param>
+        /// <param name="stopCallback">The new stop callback.</param>
+        public static void UpdateStopCallback(byte controllerId, Action stopCallback)
         {
             lock (lockObject)
             {
-                availableIds.Add(id);
-                idPriorities.Remove(id);
-                stopCallbacks.Remove(id);
-                TryProcessQueue();
+                if (controllerPriorities.ContainsKey(controllerId))
+                {
+                    var (priority, _) = controllerPriorities[controllerId];
+                    controllerPriorities[controllerId] = (priority, stopCallback);
+                    Log.Debug($"[AudioManagerAPI] Updated stop callback for controller ID {controllerId} at {Timing.LocalTime}.");
+                }
             }
         }
 
-        private static void TryProcessQueue()
+        /// <summary>
+        /// Releases a controller ID, making it available for reuse.
+        /// </summary>
+        /// <param name="controllerId">The controller ID to release.</param>
+        public static void ReleaseId(byte controllerId)
         {
             lock (lockObject)
             {
-                if (queuedRequests.Count == 0 || availableIds.Count == 0)
-                    return;
-
-                var request = queuedRequests[0];
-                queuedRequests.RemoveAt(0);
-                byte id = availableIds.First();
-                availableIds.Remove(id);
-                idPriorities[id] = request.priority;
-                stopCallbacks[id] = () => { }; // Placeholder, updated by PlayAudio
-                request.onSuccess(id);
+                if (controllerPriorities.Remove(controllerId))
+                {
+                    Log.Debug($"[AudioManagerAPI] Released controller ID {controllerId} at {Timing.LocalTime}.");
+                }
             }
         }
     }

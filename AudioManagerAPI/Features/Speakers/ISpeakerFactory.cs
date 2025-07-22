@@ -8,11 +8,11 @@
     public interface ISpeakerFactory
     {
         /// <summary>
-        /// Creates a new speaker at the specified position with a unique controller ID.
+        /// Creates a speaker at the specified position with a unique controller ID.
         /// </summary>
-        /// <param name="position">The 3D position where the speaker should be created.</param>
-        /// <param name="controllerId">The unique identifier for the speaker.</param>
-        /// <returns>A new <see cref="ISpeaker"/> instance, or <c>null</c> if creation fails.</returns>
+        /// <param name="position">The 3D world position for audio playback.</param>
+        /// <param name="controllerId">The unique controller ID.</param>
+        /// <returns>An <see cref="ISpeaker"/> instance, or null if creation fails.</returns>
         ISpeaker CreateSpeaker(Vector3 position, byte controllerId);
     }
 }

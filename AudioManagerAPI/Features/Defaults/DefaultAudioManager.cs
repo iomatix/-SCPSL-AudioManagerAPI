@@ -2,6 +2,13 @@
 {
     using AudioManagerAPI.Features.Enums;
     using AudioManagerAPI.Features.Management;
+    using AudioManagerAPI.Features.Speakers;
+    using LabApi.Features.Wrappers;
+    using MEC;
+    using System;
+    using System.Collections.Generic;
+    using System.IO;
+    using UnityEngine;
 
     /// <summary>
     /// Static entry point for a ready-to-use AudioManager wired up with
@@ -9,13 +16,16 @@
     /// once at startup, then use the convenience methods for play/pause/resume/stop.
     /// <example>
     /// // Plugin startup
-    /// AudioManagerDefaults.RegisterDefaults();
+    /// DefaultAudioManager.RegisterDefaults();
     ///
-    /// // anywhere in plugin code
-    /// byte id = AudioManagerDefaults.Play("explosionSound");
-    /// AudioManagerDefaults.Pause(id);
-    /// AudioManagerDefaults.Resume(id);
-    /// AudioManagerDefaults.Stop(id);
+    /// // Anywhere in plugin code
+    /// DefaultAudioManager.RegisterAudio("explosionSound", () => Assembly.GetExecutingAssembly().GetManifestResourceStream("MyPlugin.Audio.explosion.wav"));
+    /// byte id = DefaultAudioManager.Play("explosionSound", queue: true, fadeInDuration: 2f);
+    /// DefaultAudioManager.Pause(id);
+    /// DefaultAudioManager.Resume(id);
+    /// DefaultAudioManager.Skip(id, 1);
+    /// DefaultAudioManager.FadeOut(id, 2f);
+    /// DefaultAudioManager.Stop(id);
     /// </example>
     /// </summary>
     public static class DefaultAudioManager
@@ -42,23 +52,33 @@
         }
 
         /// <summary>
+        /// Registers an audio stream provider for a given key.
+        /// </summary>
+        /// <param name="key">The unique key for the audio.</param>
+        /// <param name="streamProvider">A function that provides the audio stream.</param>
+        public static void RegisterAudio(string key, Func<Stream> streamProvider)
+        {
+            Instance.RegisterAudio(key, streamProvider);
+        }
+
+        /// <summary>
         /// Plays the audio registered under the given key with default parameters:
-        /// non-spatial, full volume, no looping, at world origin, low priority.
+        /// non-spatial, full volume, no looping, low priority, audible to all ready players.
         /// </summary>
         /// <param name="key">The unique key of a previously registered audio stream.</param>
+        /// <param name="queue">Whether to queue the audio instead of playing immediately.</param>
+        /// <param name="fadeInDuration">The duration of the fade-in effect in seconds (0 for no fade).</param>
         /// <returns>
         /// The controller ID allocated for this playback instance, or 0 if playback failed.
         /// </returns>
-        public static byte Play(string key)
-            => Instance.PlayAudio(
+        public static byte Play(string key, bool queue = false, float fadeInDuration = 0f)
+            => Instance.PlayGlobalAudio(
                 key,
-                position: Vector3.zero,
                 loop: false,
                 volume: 1f,
-                minDistance: 1f,
-                maxDistance: 10f,
-                isSpatial: false,
-                priority: AudioPriority.Low
+                priority: AudioPriority.Low,
+                queue: queue,
+                fadeInDuration: fadeInDuration
             );
 
         /// <summary>
@@ -78,10 +98,35 @@
             => Instance.ResumeAudio(id);
 
         /// <summary>
-        /// Stops playback and destroys the speaker associated with the specified controller ID.
+        /// Skips the current or queued audio clips for the specified controller ID.
         /// </summary>
-        /// <param name="id">Controller ID of the speaker to stop.</param>
+        /// <param name="id">Controller ID of the speaker.</param>
+        /// <param name="count">The number of clips to skip, including the current one.</param>
+        public static void Skip(byte id, int count = 1)
+            => Instance.SkipAudio(id, count);
+
+        /// <summary>
+        /// Fades in the audio volume for the specified controller ID over the given duration.
+        /// </summary>
+        /// <param name="id">Controller ID of the speaker to fade in.</param>
+        /// <param name="duration">The duration of the fade-in in seconds.</param>
+        public static void FadeIn(byte id, float duration)
+            => Instance.FadeInAudio(id, duration);
+
+        /// <summary>
+        /// Fades out the audio volume for the specified controller ID over the given duration and stops playback.
+        /// </summary>
+        /// <param name="id">Controller ID of the speaker to fade out.</param>
+        /// <param name="duration">The duration of the fade-out in seconds.</param>
+        public static void FadeOut(byte id, float duration)
+            => Instance.FadeOutAudio(id, duration);
+
+        /// <summary>
+        /// Stops playback and destroys the speaker associated with the specified controller ID,
+        /// releasing the controller ID back to the pool.
+        /// </summary>
+        /// <param name="id">Controller ID of the speaker to stop and destroy.</param>
         public static void Stop(byte id)
-            => Instance.StopAudio(id);
+            => Instance.DestroySpeaker(id);
     }
 }
