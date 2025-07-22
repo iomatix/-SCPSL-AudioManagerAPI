@@ -35,7 +35,7 @@ Example `.csproj` snippet:
     <TargetFramework>net48</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="SCPSL-AudioManagerAPI" Version="1.0.1" />
+    <PackageReference Include="SCPSL-AudioManagerAPI" Version="1.0.3" />
     <Reference Include="LabApi">
       <HintPath>path\to\LabApi.dll</HintPath>
     </Reference>
