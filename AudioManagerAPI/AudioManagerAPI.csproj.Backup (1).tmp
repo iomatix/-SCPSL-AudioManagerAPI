@@ -72,6 +72,7 @@
 
 <ItemGroup>
 <PackageReference Include="Microsoft.SourceLink.GitHub" Version="3.0.0" PrivateAssets="All" />
+<None Remove="bin\Release\net48\\AudioManagerAPI.xml" />
 <None Include="$(OutputPath)\$(AssemblyName).xml">
   <Pack>true</Pack>
   <PackagePath>lib\net48\</PackagePath>
