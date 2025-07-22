@@ -64,6 +64,16 @@
         }
 
         /// <summary>
+        /// Checks whether the audio controller is active (i.e. has a non-zero ID).
+        /// </summary>
+        /// <param name="controllerId">The audio controller ID.</param>
+        /// <returns><c>true</c> if the controller ID is valid; otherwise, <c>false</c>.</returns>
+        private bool IsValidControllerId(byte controllerId)
+        {
+            return controllerId != 0;
+        }
+
+        /// <summary>
         /// Plays audio at the specified position with optional configuration.
         /// </summary>
         /// <param name="key">The key identifying the audio to play.</param>
