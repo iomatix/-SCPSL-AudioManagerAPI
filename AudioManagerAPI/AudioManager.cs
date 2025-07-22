@@ -70,7 +70,7 @@
         /// <returns><c>true</c> if the controller ID is valid; otherwise, <c>false</c>.</returns>
         public bool IsValidController(byte controllerId)
         {
-            return controllerId != 0;
+            return controllerId != 0 && activeSpeakers.ContainsKey(controllerId);
         }
 
         /// <summary>
