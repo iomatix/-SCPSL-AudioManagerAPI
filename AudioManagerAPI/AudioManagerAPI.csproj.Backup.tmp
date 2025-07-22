@@ -15,19 +15,16 @@
     <!-- Disable SDK’s auto‐generated AssemblyInfo → avoids duplicate [AssemblyFileVersion] -->
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
 
-    <!-- Attach docstrings and source code -->
+    <!-- Attach docstrings -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
-    <EnableSourceLink>true</EnableSourceLink>
-    <PublishRepositoryUrl>true</PublishRepositoryUrl>
-    <EmbedUntrackedSources>true</EmbedUntrackedSources>
 
     <!-- NuGet package on build -->
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <IsPackable>true</IsPackable>
     <IncludeContentInPack>true</IncludeContentInPack>
     <PackageId>SCPSL-AudioManagerAPI</PackageId>
-    <Version>1.2.2</Version>
+    <Version>1.2.1</Version>
 
     <!-- Windows RIDs for restore/pack -->
     <RuntimeIdentifiers>win;win-x64;win-x86</RuntimeIdentifiers>
@@ -70,8 +67,11 @@
     </None>
   </ItemGroup>
 
+  <ItemGroup>
+    <None Remove="bin\Release\net48\\AudioManagerAPI.xml" />
+  </ItemGroup>
+
 <ItemGroup>
-<PackageReference Include="Microsoft.SourceLink.GitHub" Version="3.0.0" PrivateAssets="All" />
 <None Include="$(OutputPath)\$(AssemblyName).xml">
   <Pack>true</Pack>
   <PackagePath>lib\net48\</PackagePath>
