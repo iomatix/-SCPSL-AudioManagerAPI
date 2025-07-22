@@ -129,7 +129,7 @@ public class LabApiSpeaker : ISpeakerWithPlayerFilter
         targetVolume = 1f;
     }
 
-    public void Play(float[] samples, bool loop)
+    public void Play(float[] samples, bool loop, float playbackPosition = 0f)
     {
         var transmitter = SpeakerToy.GetTransmitter(speakerToy.ControllerId);
         transmitter?.Play(samples, queue: false, loop: loop);
@@ -179,11 +179,16 @@ public class LabApiSpeaker : ISpeakerWithPlayerFilter
         }
     }
 
-    public void FadeOut(float duration)
+    public void FadeOut(float duration, Action onComplete = null)
     {
         if (duration > 0)
         {
-            Timing.RunCoroutine(FadeVolume(speakerToy.Volume, 0f, duration, stopOnComplete: true));
+            Timing.RunCoroutine(FadeVolume(speakerToy.Volume, 0f, duration, stopOnComplete: true, onComplete));
+        }
+        else
+        {
+            Stop();
+            onComplete?.Invoke();
         }
     }
 
@@ -192,7 +197,7 @@ public class LabApiSpeaker : ISpeakerWithPlayerFilter
         var transmitter = SpeakerToy.GetTransmitter(speakerToy.ControllerId);
         if (transmitter != null)
         {
-            transmitter.ValidPlayers = playerFilter as Func<Player, bool>;
+            transmitter.ValidPlayers = playerFilter;
         }
     }
 
@@ -217,7 +222,7 @@ public class LabApiSpeaker : ISpeakerWithPlayerFilter
         speakerToy.IsSpatial = isSpatial;
     }
 
-    private IEnumerator<float> FadeVolume(float startVolume, float endVolume, float duration, bool stopOnComplete = false)
+    private IEnumerator<float> FadeVolume(float startVolume, float endVolume, float duration, bool stopOnComplete = false, Action onComplete = null)
     {
         float elapsed = 0f;
         while (elapsed < duration)
@@ -232,6 +237,7 @@ public class LabApiSpeaker : ISpeakerWithPlayerFilter
         {
             Stop();
         }
+        onComplete?.Invoke();
     }
 }
 
@@ -279,9 +285,9 @@ public class MyPluginAudioManager
         byte controllerId = audioManager.PlayAudio("myplugin.scream", position, false, 
             volume: 0.8f, minDistance: 5f, maxDistance: 50f, isSpatial: true, priority: AudioPriority.High, speaker =>
             {
-                if (speaker is LabApiSpeaker labSpeaker)
+                if (speaker is ISpeakerWithPlayerFilter filterSpeaker)
                 {
-                    labSpeaker.SetValidPlayers(p => p == targetPlayer);
+                    filterSpeaker.SetValidPlayers(p => p == targetPlayer);
                 }
             });
         if (audioManager.IsValidController(controllerId))
@@ -334,6 +340,8 @@ The `AudioCache` class processes WAV files with the following specifications:
 - **Header**: Expects a standard WAV header; skips the first 44 bytes during loading.
 - **Recommendation**: Prefix audio keys with your plugin’s namespace (e.g., `myplugin.scream`) to avoid conflicts with other plugins.
 
+> **Note**: The API has been tested with this configuration, and audio files play correctly. Ensure your WAV files adhere to these specifications for compatibility.
+
 ## Audio Control and Prioritization
 
 - **Volume**: Set between 0.0 (mute) and 1.0 (full volume) to control loudness (`SetVolume`).
@@ -355,7 +363,7 @@ The `AudioCache` class processes WAV files with the following specifications:
 | `ISpeakerWithPlayerFilter` | `AudioManagerAPI.Features.Speakers`   | Extends `ISpeaker` to support player-specific audibility, volume, range, and spatialization. |
 | `ISpeakerFactory`        | `AudioManagerAPI.Features.Speakers`   | Defines a factory for creating speaker instances.                            |
 | `AudioCache`             | `AudioManagerAPI.Cache`               | Manages audio samples with LRU eviction and lazy loading.                    |
-| `ControllerIdManager`     | `AudioManagerAPI.Controllers`        | Static class for managing unique controller IDs with priority-based eviction and queuing. |
+| `ControllerIdManager`    | `AudioManagerAPI.Controllers`         | Static class for managing unique controller IDs with priority-based eviction and queuing. |
 | `AudioPriority`          | `AudioManagerAPI.Features.Enums`      | Enum defining audio priority levels (Low, Medium, High).                     |
 | `DefaultAudioManager`    | `AudioManagerAPI.Defaults`            | Simplifies audio management with default settings and convenience methods.   |
 | `DefaultSpeakerToyAdapter` | `AudioManagerAPI.Defaults`          | Default LabAPI `SpeakerToy` adapter with full feature support.               |
@@ -364,28 +372,31 @@ The `AudioCache` class processes WAV files with the following specifications:
 ### Important Methods
 
 - **`IAudioManager.RegisterAudio(string key, Func<Stream> streamProvider)`**: Registers a WAV stream for lazy loading.
-- **`IAudioManager.PlayAudio(string key, Vector3 position, bool loop, float volume, float minDistance, float maxDistance, bool isSpatial, AudioPriority priority, Action<ISpeaker> configureSpeaker, bool queue)`**: Plays or queues audio with optional configuration.
-- **`IAudioManager.PlayGlobalAudio(string key, bool loop, float volume, AudioPriority priority, bool queue)`**: Plays or queues audio globally, audible to all players.
+- **`IAudioManager.PlayAudio(string key, Vector3 position, bool loop, float volume, float minDistance, float maxDistance, bool isSpatial, AudioPriority priority, Action<ISpeaker> configureSpeaker, bool queue, bool persistent, float? lifespan, bool autoCleanup)`**: Plays or queues audio with optional configuration.
+- **`IAudioManager.PlayGlobalAudio(string key, bool loop, float volume, AudioPriority priority, bool queue, float fadeInDuration, bool persistent, float? lifespan, bool autoCleanup)`**: Plays or queues audio globally, audible to all players.
+- **`IAudioManager.RecoverSpeaker(byte controllerId, bool resetPlayback)`**: Recovers a persistent speaker with saved state.
 - **`IAudioManager.PauseAudio(byte controllerId)`**: Pauses audio playback.
 - **`IAudioManager.ResumeAudio(byte controllerId)`**: Resumes paused audio.
 - **`IAudioManager.SkipAudio(byte controllerId, int count)`**: Skips the current or queued clips.
 - **`IAudioManager.FadeInAudio(byte controllerId, float duration)`**: Fades in audio volume.
 - **`IAudioManager.FadeOutAudio(byte controllerId, float duration)`**: Fades out and stops audio.
 - **`IAudioManager.StopAudio(byte controllerId)`**: Stops audio playback.
-- **`IAudioManager.DestroySpeaker(byte controllerId)`**: Destroys a speaker and releases its ID.
+- **`IAudioManager.DestroySpeaker(byte controllerId, bool forceRemoveState)`**: Destroys a speaker and releases its ID.
 - **`IAudioManager.CleanupAllSpeakers()`**: Cleans up all active speakers and releases their IDs.
 - **`IAudioManager.GetSpeaker(byte controllerId)`**: Retrieves a speaker instance for further configuration.
+- **`SpeakerExtensions.Configure(ISpeaker, float volume, float minDistance, float maxDistance, bool isSpatial, Action<ISpeaker> configureSpeaker)`**: Configures speaker settings.
+- **`SpeakerExtensions.StartAutoStop(ISpeaker, byte controllerId, float lifespan, bool autoCleanup, Action<byte> fadeOutAction)`**: Initiates automatic speaker cleanup.
 
 ### Events
 
-The `IAudioManager` interface defines several events that can be subscribed to for tracking audio state changes:
+The `IAudioManager` interface defines several events for tracking audio state changes:
 
-- `OnPlaybackStarted`: Invoked when a speaker begins playback.
-- `OnPaused`: Raised when playback is paused for a given controller ID.
-- `OnResumed`: Raised when previously paused audio resumes playback.
-- `OnStop`: Raised when audio playback is explicitly stopped for a given controller ID.
-- `OnSkipped`: Raised when audio skip logic is invoked for a specified controller ID.
-- `OnQueueEmpty`: Triggered when the audio queue for a speaker becomes empty.
+- **`OnPlaybackStarted`**: Invoked when a speaker begins playback.
+- **`OnPaused`**: Raised when playback is paused for a given controller ID.
+- **`OnResumed`**: Raised when previously paused audio resumes playback.
+- **`OnStop`**: Raised when audio playback is explicitly stopped for a given controller ID.
+- **`OnSkipped`**: Raised when audio skip logic is invoked for a specified controller ID.
+- **`OnQueueEmpty`**: Triggered when the audio queue for a speaker becomes empty.
 
 These events can be used to synchronize UI elements, manage state persistence, or trigger custom logic based on audio events.
 
@@ -394,9 +405,10 @@ These events can be used to synchronize UI elements, manage state persistence, o
 - **Controller ID Synchronization**: `ControllerIdManager` ensures no ID conflicts by maintaining a shared pool of IDs (1-255). High-priority audio can evict lower-priority speakers or be queued for later allocation.
 - **Thread Safety**: All operations (ID allocation, caching, speaker management) are thread-safe using locks.
 - **Dependencies**: Requires `UnityEngine.CoreModule`, `LabApi`, and `MEC`. Ensure these are available in your SCP:SL environment.
-- **Logging**: Use your plugin’s logging system (e.g., Exiled’s `Log`) for debugging playback, prioritization, or resource errors.
+- **Logging**: Uses `LabApi.Features.Console.Logger` for debugging. Integrate with your plugin’s logging system (e.g., Exiled’s `Log`) for additional context.
 - **Spatial Audio**: Use `isSpatial: true` for positional effects (e.g., screams) and `isSpatial: false` for ambient sounds (e.g., background music). Non-spatial audio defaults to `Vector3.zero` for global playback.
 - **Fading and Queuing**: Use `FadeIn`/`FadeOut` for smooth transitions and `queue: true` to play multiple clips sequentially.
+- **Persistent Speakers**: Use `persistent: true` to retain speaker state for recovery after eviction or scene reloads.
 
 ## Contributing
 
