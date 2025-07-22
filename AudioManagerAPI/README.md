@@ -355,10 +355,10 @@ The `AudioCache` class processes WAV files with the following specifications:
 | `ISpeakerWithPlayerFilter` | `AudioManagerAPI.Features.Speakers`   | Extends `ISpeaker` to support player-specific audibility, volume, range, and spatialization. |
 | `ISpeakerFactory`        | `AudioManagerAPI.Features.Speakers`   | Defines a factory for creating speaker instances.                            |
 | `AudioCache`             | `AudioManagerAPI.Cache`               | Manages audio samples with LRU eviction and lazy loading.                    |
-| `ControllerIdManager`     | `AudioManagerAPI`                    | Static class for managing unique controller IDs with priority-based eviction and queuing. |
-| `AudioPriority`          | `AudioManagerAPI`                    | Enum defining audio priority levels (Low, Medium, High).                     |
+| `ControllerIdManager`     | `AudioManagerAPI.Controllers`        | Static class for managing unique controller IDs with priority-based eviction and queuing. |
+| `AudioPriority`          | `AudioManagerAPI.Features.Enums`      | Enum defining audio priority levels (Low, Medium, High).                     |
 | `DefaultAudioManager`    | `AudioManagerAPI.Defaults`            | Simplifies audio management with default settings and convenience methods.   |
-| `DefaultSpeakerToyAdapter` | `AudioManagerAPI.Defaults`            | Default LabAPI `SpeakerToy` adapter with full feature support.               |
+| `DefaultSpeakerToyAdapter` | `AudioManagerAPI.Defaults`          | Default LabAPI `SpeakerToy` adapter with full feature support.               |
 | `DefaultSpeakerFactory`  | `AudioManagerAPI.Defaults`            | Creates `DefaultSpeakerToyAdapter` instances for default usage.              |
 
 ### Important Methods
