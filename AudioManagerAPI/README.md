@@ -173,7 +173,7 @@ Use `IAudioManager` to play audio at specific positions, either locally or globa
           }
       });
 
-      if (controllerId != 0)
+      if (audioManager.IsValidController(controllerId))
       {
           Log.Info($"Played scream with controller ID {controllerId.Value}.");
       }
@@ -186,7 +186,7 @@ Use `IAudioManager` to play audio at specific positions, either locally or globa
   {
       byte controllerId = audioManager.PlayGlobalAudio("myplugin.scream", position, false, 
           volume: 0.8f, minDistance: 5f, maxDistance: 50f, isSpatial: true, priority: AudioPriority.High);
-      if (controllerId != 0)
+      if (audioManager.IsValidController(controllerId))
       {
           Log.Info($"Played global scream with controller ID {controllerId.Value}.");
       }
