@@ -77,7 +77,7 @@
         /// </summary>
         /// <param name="controllerId">The audio controller ID to validate.</param>
         /// <returns><c>true</c> if the controller ID is valid; otherwise, <c>false</c>.</returns>
-        bool IsValidControllerId(byte controllerId);
+        bool IsValidController(byte controllerId);
 
     }
 
