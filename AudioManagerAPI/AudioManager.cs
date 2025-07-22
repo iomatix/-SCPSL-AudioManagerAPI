@@ -68,7 +68,7 @@
         /// </summary>
         /// <param name="controllerId">The audio controller ID.</param>
         /// <returns><c>true</c> if the controller ID is valid; otherwise, <c>false</c>.</returns>
-        private bool IsValidController(byte controllerId)
+        public bool IsValidController(byte controllerId)
         {
             return controllerId != 0;
         }
