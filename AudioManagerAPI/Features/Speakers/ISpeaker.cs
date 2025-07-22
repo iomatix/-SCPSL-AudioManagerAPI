@@ -18,6 +18,22 @@
         void Stop();
 
         /// <summary>
+        /// Pauses the currently playing audio.
+        /// </summary>
+        void Pause();
+
+        /// <summary>
+        /// Resumes the currently playing audio.
+        /// </summary>
+        void Resume();
+
+        /// <summary>
+        /// Indicates whether this speaker implementation supports pause/resume.
+        /// </summary>
+        bool CanPause { get; }
+
+
+        /// <summary>
         /// Destroys the speaker, releasing all associated resources.
         /// </summary>
         void Destroy();

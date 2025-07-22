@@ -1,4 +1,4 @@
-﻿namespace AudioManagerAPI.Features.Management
+﻿namespace AudioManagerAPI.Controllers
 {
     using System;
     using System.Collections.Generic;

@@ -1,18 +1,20 @@
 ﻿namespace AudioManagerAPI
 {
-    using UnityEngine;
     using AudioManagerAPI.Cache;
+    using AudioManagerAPI.Controllers;
+    using AudioManagerAPI.Features.Enums;
     using AudioManagerAPI.Features.Management;
     using AudioManagerAPI.Features.Speakers;
     using System;
     using System.Collections.Generic;
     using System.IO;
-    using AudioManagerAPI.Features.Enums;
+    using System.Numerics;
+    using UnityEngine;
 
     /// <summary>
     /// Implements audio management with speaker lifecycle and caching for game audio playback.
     /// </summary>
-    public class AudioManager : IAudioManager
+    public partial class AudioManager : IAudioManager
     {
         private readonly ISpeakerFactory speakerFactory;
         private readonly AudioCache audioCache;
@@ -165,6 +167,35 @@
                 if (activeSpeakers.TryGetValue(controllerId, out var speaker))
                 {
                     speaker.Stop();
+                }
+            }
+
+            /// <summary>
+            /// Pauses the audio associated with the specified controller ID.
+            /// </summary>
+            /// <param name="controllerId">The controller ID of the speaker to destroy.</param>
+           public void PauseAudio(byte controllerId)
+        {
+            lock (lockObject)
+            {
+                if (activeSpeakers.TryGetValue(controllerId, out var speaker))
+                {
+                    speaker.Pause();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Resumes paused audio associated with the specified controller ID.
+        /// </summary>
+        /// <param name="controllerId">The controller ID of the speaker to destroy.</param>
+        public void ResumeAudio(byte controllerId)
+        {
+            lock (lockObject)
+            {
+                if (activeSpeakers.TryGetValue(controllerId, out var speaker))
+                {
+                    speaker.Resume();
                 }
             }
         }

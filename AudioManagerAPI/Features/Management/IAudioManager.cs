@@ -55,6 +55,18 @@
         void StopAudio(byte controllerId);
 
         /// <summary>
+        /// Pauses the audio associated with the specified controller ID.
+        /// </summary>
+        /// <param name="controllerId">The controller ID of the speaker to destroy.</param>
+        void PauseAudio(byte controllerId);
+
+        /// <summary>
+        /// Resumes paused audio associated with the specified controller ID.
+        /// </summary>
+        /// <param name="controllerId">The controller ID of the speaker to destroy.</param>
+        void ResumeAudio(byte controllerId);
+
+        /// <summary>
         /// Destroys the speaker with the specified controller ID.
         /// </summary>
         /// <param name="controllerId">The controller ID of the speaker to destroy.</param>
