@@ -1,4 +1,3 @@
-```markdown
 # SCPSL-AudioManagerAPI
 
 [![NuGet Version](https://img.shields.io/nuget/v/SCPSL-AudioManagerAPI.svg)](https://www.nuget.org/packages/SCPSL-AudioManagerAPI/)  
@@ -526,4 +525,3 @@ Contributions are welcome! Please submit issues or pull requests to the [GitHub 
 ## License
 
 This project is licensed under the GNU Lesser General Public License v3.0 (LGPL3). See the [LICENSE](LICENSE) file for details.
-```
