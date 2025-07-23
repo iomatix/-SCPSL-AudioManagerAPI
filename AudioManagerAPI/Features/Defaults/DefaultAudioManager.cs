@@ -1,14 +1,9 @@
 ﻿namespace AudioManagerAPI.Defaults
 {
+    using System;
+    using System.IO;
     using AudioManagerAPI.Features.Enums;
     using AudioManagerAPI.Features.Management;
-    using AudioManagerAPI.Features.Speakers;
-    using LabApi.Features.Wrappers;
-    using MEC;
-    using System;
-    using System.Collections.Generic;
-    using System.IO;
-    using UnityEngine;
 
     /// <summary>
     /// Static entry point for a ready-to-use AudioManager wired up with

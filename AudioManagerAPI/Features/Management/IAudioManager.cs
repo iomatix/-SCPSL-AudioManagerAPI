@@ -1,10 +1,12 @@
 ﻿namespace AudioManagerAPI.Features.Management
 {
+    using AudioManagerAPI.Features.Enums;
+    using AudioManagerAPI.Features.Speakers;
+    using AudioManagerAPI.Speakers.State;
+    using LabApi.Features.Wrappers;
     using System;
     using System.IO;
     using UnityEngine;
-    using AudioManagerAPI.Features.Speakers;
-    using AudioManagerAPI.Features.Enums;
 
     /// <summary>
     /// Defines the contract for managing audio playback and speaker lifecycle.
@@ -59,163 +61,198 @@
         /// Ideal for cleanup logic, auto-removal of inactive speakers, or triggering chained actions.
         /// </remarks>
         event Action<byte> OnQueueEmpty;
-
-
-
         #endregion
 
         #region Methods
         /// <summary>
-        /// Registers an audio stream provider for a given key.
+        /// Registers an audio clip with the specified key and stream provider.
         /// </summary>
-        /// <param name="key">The unique key for the audio.</param>
-        /// <param name="streamProvider">A function that provides the audio stream.</param>
+        /// <param name="key">The unique identifier for the audio clip.</param>
+        /// <param name="streamProvider">The function providing the audio stream (48kHz, Mono, 16-bit PCM WAV).</param>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="key"/> or <paramref name="streamProvider"/> is null.</exception>
         void RegisterAudio(string key, Func<Stream> streamProvider);
 
         /// <summary>
-        /// Retrieves the speaker instance for the specified controller ID.
+        /// Retrieves the speaker associated with the specified controller ID.
         /// </summary>
         /// <param name="controllerId">The controller ID of the speaker.</param>
-        /// <returns>The speaker instance, or <c>null</c> if not found.</returns>
+        /// <returns>The <see cref="ISpeaker"/> instance, or null if not found.</returns>
         ISpeaker GetSpeaker(byte controllerId);
 
         /// <summary>
-        /// Determines whether a given controller ID refers to a valid, active speaker.
+        /// Checks if the specified controller ID is valid and associated with an active speaker.
         /// </summary>
-        /// <param name="controllerId">The controller ID to validate.</param>
-        /// <returns><c>true</c> if the controller ID is valid; otherwise, <c>false</c>.</returns>
+        /// <param name="controllerId">The controller ID to check.</param>
+        /// <returns>True if the controller ID is valid and has an active speaker, false otherwise.</returns>
         bool IsValidController(byte controllerId);
 
         /// <summary>
-        /// Plays audio at the specified position with optional configuration.
+        /// Plays an audio clip at the specified position with the given settings.
         /// </summary>
-        /// <param name="key">The key identifying the audio to play.</param>
-        /// <param name="position">The 3D position for playback.</param>
+        /// <param name="key">The unique identifier of the audio clip.</param>
+        /// <param name="position">The 3D world-space position for the speaker.</param>
         /// <param name="loop">Whether the audio should loop.</param>
-        /// <param name="volume">The volume level (0.0 to 1.0).</param>
-        /// <param name="minDistance">The minimum distance where audio starts to fall off.</param>
-        /// <param name="maxDistance">The maximum distance where audio falls to zero.</param>
+        /// <param name="volume">The playback volume (0.0 to 1.0).</param>
+        /// <param name="minDistance">The minimum distance for volume falloff.</param>
+        /// <param name="maxDistance">The maximum distance for audibility.</param>
         /// <param name="isSpatial">Whether to use 3D spatial audio.</param>
-        /// <param name="priority">The priority of the audio.</param>
-        /// <param name="configureSpeaker">An optional action to configure the speaker before playback.</param>
-        /// <param name="queue">
-        /// If <c>true</c>, adds the audio clip to the playback queue without interrupting the current clip.
-        /// If <c>false</c>, replaces any currently playing audio.
-        /// </param>
-        /// <param name="persistent">
-        /// If <c>true</c>, retains speaker state for possible recovery after playback ends or during scene reload.
-        /// </param>
-        /// <param name="lifespan">
-        /// Optional duration (in seconds) after which the speaker will automatically stop playback.
-        /// Used only if <paramref name="autoCleanup"/> is enabled.
-        /// </param>
-        /// <param name="autoCleanup">
-        /// If <c>true</c> and <paramref name="lifespan"/> is set, playback will stop automatically and optionally fade out.
-        /// </param>
-        /// <returns>The controller ID of the speaker, or 0 if playback fails.</returns>
+        /// <param name="priority">The priority for controller ID allocation.</param>
+        /// <param name="configureSpeaker">Optional delegate for custom speaker configuration.</param>
+        /// <param name="queue">Whether to queue the audio behind the current playback.</param>
+        /// <param name="persistent">Whether the speaker state should be persistent for recovery.</param>
+        /// <param name="lifespan">Optional lifespan (in seconds) before auto-stopping.</param>
+        /// <param name="autoCleanup">Whether to fade out and stop after the lifespan.</param>
+        /// <returns>The controller ID assigned to the speaker, or 0 if playback failed.</returns>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="key"/> is null.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">
+        /// Thrown if <paramref name="volume"/> is not between 0.0 and 1.0, <paramref name="minDistance"/> is negative,
+        /// or <paramref name="maxDistance"/> is less than <paramref name="minDistance"/>.
+        /// </exception>
+        /// <remarks>
+        /// This method allocates a controller ID, creates a speaker, and configures it with the specified settings.
+        /// If <paramref name="persistent"/> is true, the speaker state is stored for recovery via <see cref="RecoverSpeaker"/>.
+        /// The method is thread-safe and uses a lock to ensure consistent state management.
+        /// </remarks>
         byte PlayAudio(string key, Vector3 position, bool loop, float volume, float minDistance, float maxDistance, bool isSpatial, AudioPriority priority, Action<ISpeaker> configureSpeaker = null, bool queue = false, bool persistent = false, float? lifespan = null, bool autoCleanup = false);
 
         /// <summary>
-        /// Plays audio globally, making it audible to all players who are ready and within range.
+        /// Plays a global audio clip audible to all players with the given settings.
         /// </summary>
-        /// <param name="key">The key identifying the audio to play.</param>
-        /// <param name="loop">Whether the audio should loop continuously.</param>
-        /// <param name="volume">The volume level (0.0 to 1.0).</param>
-        /// <param name="priority">The priority of the audio, affecting ID allocation and playback competition.</param>
-        /// <param name="queue">
-        /// If <c>true</c>, the audio clip is added to the playback queue without interrupting any currently playing audio.  
-        /// If <c>false</c>, it replaces the active clip immediately.
-        /// </param>
-        /// <param name="fadeInDuration">
-        /// Duration of the fade-in effect, in seconds.  
-        /// Set to <c>0</c> for instant playback with no fade.
-        /// </param>
-        /// <param name="persistent">
-        /// If <c>true</c>, retains the speaker state after playback ends, allowing for recovery or reuse across scenes or sessions.
-        /// </param>
-        /// <param name="lifespan">
-        /// Optional time limit (in seconds) for the speaker’s existence.  
-        /// After expiration, the speaker is automatically stopped and optionally cleaned up.
-        /// </param>
-        /// <param name="autoCleanup">
-        /// If <c>true</c> and <paramref name="lifespan"/> is provided, the speaker fades out and is destroyed when time expires.
-        /// </param>
-        /// <returns>The controller ID assigned to the global speaker instance, or <c>0</c> if playback fails.</returns>
+        /// <param name="key">The unique identifier of the audio clip.</param>
+        /// <param name="loop">Whether the audio should loop.</param>
+        /// <param name="volume">The playback volume (0.0 to 1.0).</param>
+        /// <param name="priority">The priority for controller ID allocation.</param>
+        /// <param name="queue">Whether to queue the audio behind the current playback.</param>
+        /// <param name="fadeInDuration">The duration (in seconds) for fading in the audio.</param>
+        /// <param name="persistent">Whether the speaker state should be persistent for recovery.</param>
+        /// <param name="lifespan">Optional lifespan (in seconds) before auto-stopping.</param>
+        /// <param name="autoCleanup">Whether to fade out and stop after the lifespan.</param>
+        /// <returns>The controller ID assigned to the speaker, or 0 if playback failed.</returns>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="key"/> is null.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">
+        /// Thrown if <paramref name="volume"/> is not between 0.0 and 1.0 or <paramref name="fadeInDuration"/> is negative.
+        /// </exception>
+        /// <remarks>
+        /// This method plays audio globally (non-spatial, max distance 999.99f) with a default
+        /// player filter limiting playback to <see cref="Player.ReadyList"/>. It supports fade-in
+        /// and persistent state for recovery.
+        /// </remarks>
         byte PlayGlobalAudio(string key, bool loop, float volume, AudioPriority priority, bool queue = false, float fadeInDuration = 0f, bool persistent = false, float? lifespan = null, bool autoCleanup = false);
 
         /// <summary>
-        /// Recovers a previously persistent speaker by reconstructing its state and resuming playback.
-        /// Useful for dynamic scene reloads or persistence across player sessions.
+        /// Sets the volume for the specified speaker dynamically.
         /// </summary>
-        /// <param name="controllerId">The controller ID associated with the speaker's saved state.</param>
-        /// <param name="resetPlayback">
-        /// If <c>true</c>, resets the playback position to the beginning of the clip.
-        /// </param>
+        /// <param name="controllerId">The controller ID of the speaker.</param>
+        /// <param name="volume">The new volume (0.0 to 1.0).</param>
+        /// <returns>True if the volume was set, false if the speaker is invalid.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="volume"/> is not between 0.0 and 1.0.</exception>
+        /// <remarks>
+        /// This method updates the volume of an active speaker and its persistent state.
+        /// Useful for dynamic audio adjustments in SCP:SL, such as fading ambient sounds.
+        /// Thread-safe with internal locking.
+        /// </remarks>
+        bool SetSpeakerVolume(byte controllerId, float volume);
+
+        /// <summary>
+        /// Sets the 3D world position for the specified speaker.
+        /// </summary>
+        /// <param name="controllerId">The controller ID of the speaker.</param>
+        /// <param name="position">The new position in world coordinates.</param>
         /// <returns>
-        /// <c>true</c> if speaker recovery succeeds; <c>false</c> if the state is invalid or recovery fails.
+        /// <c>true</c> if the position was successfully updated; <c>false</c> if the speaker was not found.
         /// </returns>
+        /// <remarks>
+        /// This method is useful for repositioning audio sources dynamically in SCP:SL,
+        /// such as moving ambient sound emitters or following an entity.
+        /// Thread-safe with internal locking.
+        /// </remarks>
+        bool SetSpeakerPosition(byte controllerId, Vector3 position);
+
+        /// <summary>
+        /// Recovers a persistent speaker using its stored state.
+        /// </summary>
+        /// <param name="controllerId">The controller ID of the speaker to recover.</param>
+        /// <param name="resetPlayback">Whether to reset the playback position to 0.</param>
+        /// <returns>True if the speaker was successfully recovered, false otherwise.</returns>
         bool RecoverSpeaker(byte controllerId, bool resetPlayback = false);
 
         /// <summary>
-        /// Stops the audio associated with the specified controller ID.
+        /// Pauses playback for the specified speaker.
         /// </summary>
-        /// <param name="controllerId">The controller ID of the speaker to stop.</param>
-        void StopAudio(byte controllerId);
-
-        /// <summary>
-        /// Pauses the audio associated with the specified controller ID.
-        /// </summary>
-        /// <param name="controllerId">The controller ID of the speaker to pause.</param>
+        /// <param name="controllerId">The controller ID of the speaker.</param>
         void PauseAudio(byte controllerId);
 
         /// <summary>
-        /// Resumes paused audio associated with the specified controller ID.
+        /// Resumes playback for the specified speaker.
         /// </summary>
-        /// <param name="controllerId">The controller ID of the speaker to resume.</param>
+        /// <param name="controllerId">The controller ID of the speaker.</param>
         void ResumeAudio(byte controllerId);
 
         /// <summary>
-        /// Skips a specified number of audio clips in the playback queue for the given speaker.
+        /// Skips the specified number of queued clips for the speaker.
         /// </summary>
-        /// <param name="controllerId">The controller ID associated with the speaker.</param>
-        /// <param name="count">
-        /// The number of audio clips to skip.  
-        /// This includes the currently playing clip if applicable.
-        /// </param>
+        /// <param name="controllerId">The controller ID of the speaker.</param>
+        /// <param name="count">The number of clips to skip.</param>
         void SkipAudio(byte controllerId, int count);
 
+        /// <summary>
+        /// Stops playback for the specified speaker immediately.
+        /// </summary>
+        /// <param name="controllerId">The controller ID of the speaker.</param>
+        void StopAudio(byte controllerId);
 
         /// <summary>
-        /// Fades in audio associated with the specified controller ID for specified duration.
+        /// Fades in the audio for the specified speaker over the given duration.
         /// </summary>
-        /// <param name="controllerId">The controller ID of the speaker to fade in.</param>
-        /// <param name="duration">The duration of the fade-in effect in seconds.</param>
+        /// <param name="controllerId">The controller ID of the speaker.</param>
+        /// <param name="duration">The fade-in duration (in seconds).</param>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="duration"/> is negative.</exception>
         void FadeInAudio(byte controllerId, float duration);
 
         /// <summary>
-        /// Fades out audio associated with the specified controller ID for specified duration.
+        /// Fades out the audio for the specified speaker and stops it.
         /// </summary>
-        /// <param name="controllerId">The controller ID of the speaker to fade out.</param>
-        /// <param name="duration">The duration of the fade-out effect in seconds.</param>
+        /// <param name="controllerId">The controller ID of the speaker.</param>
+        /// <param name="duration">The fade-out duration (in seconds).</param>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="duration"/> is negative.</exception>
         void FadeOutAudio(byte controllerId, float duration);
 
         /// <summary>
-        /// Stops playback, destroys the speaker instance tied to the provided controller ID,  
-        /// and optionally removes its state permanently from memory.
+        /// Retrieves the current queue status for the specified speaker.
         /// </summary>
-        /// <param name="controllerId">The controller ID of the speaker to destroy.</param>
-        /// <param name="forceRemoveState">
-        /// If <c>true</c>, the state associated with the controller is forcibly removed,
-        /// even if flagged as persistent.
-        /// </param>
+        /// <param name="controllerId">The controller ID of the speaker.</param>
+        /// <returns>A tuple containing the number of queued clips and the current clip key, or (0, null) if the speaker is invalid or does not support queuing.</returns>
+        /// <remarks>
+        /// This method retrieves the number of queued clips and the current clip key for the specified speaker.
+        /// Useful for debugging or updating UI elements in SCP:SL, such as displaying the current audio queue.
+        /// Thread-safe with internal locking.
+        /// </remarks>
+        (int queuedCount, string currentClip) GetQueueStatus(byte controllerId);
+
+        /// <summary>
+        /// Clears the playback queue for the specified speaker.
+        /// </summary>
+        /// <param name="controllerId">The controller ID of the speaker.</param>
+        /// <returns>True if the queue was cleared, false if the speaker is invalid or does not support queue clearing.</returns>
+        /// <remarks>
+        /// This method clears all queued clips for the specified speaker without stopping current playback.
+        /// For persistent speakers, the <see cref="SpeakerState.QueuedClips"/> list is also cleared.
+        /// Useful for dynamically updating audio sequences in SCP:SL, such as when changing ambient sounds
+        /// or canceling queued announcements. Thread-safe with internal locking.
+        /// </remarks>
+        bool ClearSpeakerQueue(byte controllerId);
+
+        /// <summary>
+        /// Destroys the specified speaker and releases its controller ID.
+        /// </summary>
+        /// <param name="controllerId">The controller ID of the speaker.</param>
+        /// <param name="forceRemoveState">Whether to force-remove the speaker's persistent state.</param>
         void DestroySpeaker(byte controllerId, bool forceRemoveState = false);
 
         /// <summary>
         /// Cleans up all active speakers and releases their controller IDs.
         /// </summary>
         void CleanupAllSpeakers();
-
         #endregion
     }
 }

@@ -2,7 +2,9 @@
 {
     using AudioManagerAPI.Features.Enums;
     using AudioManagerAPI.Features.Speakers;
+    using LabApi.Features.Wrappers;
     using System;
+    using System.Collections.Generic;
     using UnityEngine;
 
     /// <summary>
@@ -53,15 +55,28 @@
         public AudioPriority Priority { get; set; }
 
         /// <summary>
-        /// Optional delegate used to apply runtime configuration logic to the speaker on instantiation or recovery.
+        /// Optional delegate used to apply runtime configuration logic to the speaker 
+        /// during instantiation or after recovery. Useful for applying custom settings 
+        /// such as volume, distance attenuation, or spatialization.
         /// </summary>
         public Action<ISpeaker> ConfigureSpeaker { get; set; }
 
         /// <summary>
-        /// Whether the audio clip should be queued behind the current playback  
-        /// or interrupt and replace the currently playing clip.
+        /// An optional filter function to determine which players are valid listeners for playback.
+        /// If provided, audio will only be transmitted to players that satisfy the condition.
+        /// Common usage includes limiting playback to <c>Player.ReadyList</c> or team-based filtering.
         /// </summary>
-        public bool Queue { get; set; }
+        public Func<Player, bool> PlayerFilter { get; set; }
+
+        /// <summary>
+        /// A list of audio clips that are pending playback, represented as tuples:
+        /// (<c>key</c>, <c>loop</c>).
+        /// Each tuple specifies:
+        /// - <c>key</c>: The unique string identifier for the audio clip.
+        /// - <c>loop</c>: A boolean flag indicating whether the clip should loop.
+        /// Clips are played in order if <see cref="Queue"/> is <c>true</c>.
+        /// </summary>
+        public List<(string key, bool loop)> QueuedClips { get; set; } = new List<(string key, bool loop)>();
 
         /// <summary>
         /// Whether this speaker state is flagged for persistence across unloads or recoverable via <c>RecoverSpeaker()</c>.

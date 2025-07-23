@@ -2,11 +2,12 @@
 {
     using System;
     using System.Collections.Generic;
+    using UnityEngine;
     using MEC;
     using AudioManagerAPI.Features.Management;
     using AudioManagerAPI.Features.Speakers;
+    using LabApi.Features.Audio;
     using LabApi.Features.Wrappers;
-    using UnityEngine;
 
     using Log = LabApi.Features.Console.Logger;
 
@@ -18,27 +19,50 @@
     {
         private readonly SpeakerToy speakerToy;
         private float targetVolume;
-        private readonly Queue<(float[] samples, bool loop)> audioQueue = new Queue<(float[] samples, bool loop)>();
-        private bool isPlaying;
-        private float playbackPosition;
-        private float[] currentSamples;
-        private float sampleRate;
 
         public event Action QueueEmpty;
 
         /// <summary>
+        /// Gets a value indicating whether the speaker's audio queue is currently empty.
+        /// </summary>
+        /// <value>
+        /// <c>true</c> if there are no queued audio clips; otherwise, <c>false</c>.
+        /// </value>
+        public bool IsQueueEmpty => SpeakerToy.GetTransmitter(speakerToy.ControllerId)?.AudioClipSamples.Count == 0;
+
+        /// <summary>
+        /// Gets the number of audio clips currently queued for playback.
+        /// </summary>
+        /// <value>
+        /// An integer representing the number of queued clips. Returns 0 if no transmitter is found.
+        /// </value>
+        public int QueuedClipsCount => SpeakerToy.GetTransmitter(speakerToy.ControllerId)?.AudioClipSamples.Count ?? 0;
+
+        /// <summary>
+        /// Gets or sets the player filter used to determine which players can hear audio from this speaker.
+        /// </summary>
+        /// <value>
+        /// A delegate that returns <c>true</c> for valid players who should receive audio playback.
+        /// </value>
+        /// <remarks>
+        /// This property is typically used to restrict playback to a subset of players.
+        /// For example, only players in a certain room or team.
+        /// </remarks>
+        public Func<Player, bool> ValidPlayers
+        {
+            get => SpeakerToy.GetTransmitter(speakerToy.ControllerId)?.ValidPlayers;
+            set => SpeakerToy.GetTransmitter(speakerToy.ControllerId).ValidPlayers = value;
+        }
+
+        /// <summary>
         /// Initializes a new instance of the <see cref="DefaultSpeakerToyAdapter"/> class.
         /// </summary>
-        /// <param name="position">The 3D world position for audio playback.</param>
+        /// <param name="speakerToy">The SpeakerToy instance to adapt.</param>
         public DefaultSpeakerToyAdapter(SpeakerToy speakerToy)
         {
             this.speakerToy = speakerToy ?? throw new ArgumentNullException(nameof(speakerToy));
             targetVolume = 1f;
-            isPlaying = false;
-            playbackPosition = 0f;
-            sampleRate = 48000f;
         }
-
 
         /// <summary>
         /// Plays the provided audio samples with the specified looping behavior.
@@ -51,62 +75,26 @@
             var transmitter = SpeakerToy.GetTransmitter(speakerToy.ControllerId);
             if (transmitter == null)
             {
-                Log.Warn($"[AudioManagerAPI] No transmitter found for SpeakerToy with ControllerId {speakerToy.ControllerId}.");
+                Log.Warn($"[DefaultSpeakerToyAdapter] No transmitter found for SpeakerToy with ControllerId {speakerToy.ControllerId}.");
                 return;
             }
 
-            // Store current samples and position
-            this.currentSamples = samples;
-            this.playbackPosition = playbackPosition;
-
-            // Convert playbackPosition (seconds) to sample index
-            int sampleIndex = Mathf.FloorToInt(playbackPosition * sampleRate);
             float[] adjustedSamples = samples;
-
-            // If playbackPosition is non-zero, slice the samples array
-            if (sampleIndex > 0 && sampleIndex < samples.Length)
+            if (playbackPosition > 0f && samples != null)
             {
+                int sampleIndex = Mathf.FloorToInt(playbackPosition * AudioTransmitter.SampleRate);
+                if (sampleIndex >= samples.Length)
+                {
+                    Log.Warn($"[DefaultSpeakerToyAdapter] Playback position {playbackPosition}s exceeds sample length for ControllerId {speakerToy.ControllerId}.");
+                    return;
+                }
                 adjustedSamples = new float[samples.Length - sampleIndex];
                 Array.Copy(samples, sampleIndex, adjustedSamples, 0, adjustedSamples.Length);
             }
-            else if (sampleIndex >= samples.Length)
-            {
-                Log.Warn($"[AudioManagerAPI] Playback position {playbackPosition}s exceeds sample length for ControllerId {speakerToy.ControllerId}.");
-                adjustedSamples = Array.Empty<float>();
-                isPlaying = false;
-                CheckQueue();
-                return;
-            }
 
-            // Play adjusted samples
             transmitter.Play(adjustedSamples, queue: false, loop: loop);
             SetVolume(targetVolume);
-            isPlaying = true;
-
-            // Start coroutine to update playback position
-            Timing.RunCoroutine(UpdatePlaybackPosition());
-
-            CheckQueue();
-        }
-
-        /// <summary>
-        /// Gets the current playback position in seconds.
-        /// </summary>
-        public float GetPlaybackPosition()
-        {
-            return playbackPosition;
-        }
-
-        /// <summary>
-        /// Updates the playback position while the audio is playing.
-        /// </summary>
-        private IEnumerator<float> UpdatePlaybackPosition()
-        {
-            while (isPlaying)
-            {
-                playbackPosition += Timing.DeltaTime;
-                yield return Timing.WaitForOneFrame;
-            }
+            Log.Debug($"[DefaultSpeakerToyAdapter] Playing clip at position {playbackPosition} for controller ID {speakerToy.ControllerId}.");
         }
 
         /// <summary>
@@ -116,10 +104,30 @@
         /// <param name="loop">Whether the audio should loop.</param>
         public void Queue(float[] samples, bool loop)
         {
-            audioQueue?.Enqueue((samples, loop));
-            CheckQueue();
+            var transmitter = SpeakerToy.GetTransmitter(speakerToy.ControllerId);
+            if (transmitter != null)
+            {
+                transmitter.Play(samples, queue: true, loop: loop);
+                Log.Debug($"[DefaultSpeakerToyAdapter] Queued clip for controller ID {speakerToy.ControllerId}.");
+            }
         }
 
+        /// <summary>
+        /// Clears queued audio samples.
+        /// </summary>
+        public void ClearQueue()
+        {
+            var transmitter = SpeakerToy.GetTransmitter(speakerToy.ControllerId);
+            if (transmitter != null)
+            {
+                transmitter.AudioClipSamples.Clear();
+                Log.Debug($"[DefaultSpeakerToyAdapter] Cleared queue for controller ID {speakerToy.ControllerId}.");
+                if (transmitter.AudioClipSamples.Count == 0)
+                {
+                    QueueEmpty?.Invoke();
+                }
+            }
+        }
 
         /// <summary>
         /// Stops the current audio playback.
@@ -128,21 +136,17 @@
         {
             var transmitter = SpeakerToy.GetTransmitter(speakerToy.ControllerId);
             transmitter?.Stop();
-            audioQueue.Clear();
-            isPlaying = false;
+            Log.Debug($"[DefaultSpeakerToyAdapter] Stopped playback for controller ID {speakerToy.ControllerId}.");
         }
 
         /// <summary>
         /// Destroys the speaker and releases its resources.
         /// </summary>
-
         public void Destroy()
         {
             speakerToy?.Destroy();
-            audioQueue.Clear();
-            isPlaying = false;
+            Log.Debug($"[DefaultSpeakerToyAdapter] Destroyed speaker for controller ID {speakerToy.ControllerId}.");
         }
-
 
         /// <summary>
         /// Pauses the current audio playback.
@@ -151,6 +155,7 @@
         {
             var transmitter = SpeakerToy.GetTransmitter(speakerToy.ControllerId);
             transmitter?.Pause();
+            Log.Debug($"[DefaultSpeakerToyAdapter] Paused playback for controller ID {speakerToy.ControllerId}.");
         }
 
         /// <summary>
@@ -160,6 +165,7 @@
         {
             var transmitter = SpeakerToy.GetTransmitter(speakerToy.ControllerId);
             transmitter?.Resume();
+            Log.Debug($"[DefaultSpeakerToyAdapter] Resumed playback for controller ID {speakerToy.ControllerId}.");
         }
 
         /// <summary>
@@ -168,13 +174,15 @@
         public void Skip(int count)
         {
             var transmitter = SpeakerToy.GetTransmitter(speakerToy.ControllerId);
-            transmitter?.Skip(count);
-            while (count > 0 && audioQueue.Count > 0)
+            if (transmitter != null)
             {
-                audioQueue.Dequeue();
-                count--;
+                transmitter.Skip(count);
+                Log.Debug($"[DefaultSpeakerToyAdapter] Skipped {count} clips for controller ID {speakerToy.ControllerId}.");
+                if (transmitter.AudioClipSamples.Count == 0)
+                {
+                    QueueEmpty?.Invoke();
+                }
             }
-            CheckQueue();
         }
 
         /// <summary>
@@ -186,6 +194,7 @@
             if (duration > 0)
             {
                 Timing.RunCoroutine(FadeVolume(0f, targetVolume, duration));
+                Log.Debug($"[DefaultSpeakerToyAdapter] Fading in over {duration}s for controller ID {speakerToy.ControllerId}.");
             }
         }
 
@@ -198,6 +207,7 @@
             if (duration > 0)
             {
                 Timing.RunCoroutine(FadeVolume(speakerToy.Volume, 0f, duration, stopOnComplete: true, onComplete));
+                Log.Debug($"[DefaultSpeakerToyAdapter] Fading out over {duration}s for controller ID {speakerToy.ControllerId}.");
             }
             else
             {
@@ -222,6 +232,7 @@
             if (transmitter != null)
             {
                 transmitter.ValidPlayers = playerFilter;
+                Log.Debug($"[DefaultSpeakerToyAdapter] Set player filter for controller ID {speakerToy.ControllerId}.");
             }
         }
 
@@ -237,8 +248,8 @@
         {
             speakerToy.Volume = Mathf.Clamp01(volume);
             targetVolume = speakerToy.Volume;
+            Log.Debug($"[DefaultSpeakerToyAdapter] Set volume to {volume} for controller ID {speakerToy.ControllerId}.");
         }
-
 
         /// <summary>
         /// Sets the minimum distance at which the audio starts to attenuate.
@@ -250,9 +261,8 @@
         public void SetMinDistance(float minDistance)
         {
             speakerToy.MinDistance = Mathf.Max(0, minDistance);
+            Log.Debug($"[DefaultSpeakerToyAdapter] Set min distance to {minDistance} for controller ID {speakerToy.ControllerId}.");
         }
-
-
 
         /// <summary>
         /// Sets the maximum distance beyond which the audio is no longer audible.
@@ -264,6 +274,7 @@
         public void SetMaxDistance(float maxDistance)
         {
             speakerToy.MaxDistance = Mathf.Max(0, maxDistance);
+            Log.Debug($"[DefaultSpeakerToyAdapter] Set max distance to {maxDistance} for controller ID {speakerToy.ControllerId}.");
         }
 
         /// <summary>
@@ -276,31 +287,33 @@
         public void SetSpatialization(bool isSpatial)
         {
             speakerToy.IsSpatial = isSpatial;
+            Log.Debug($"[DefaultSpeakerToyAdapter] Set spatialization to {isSpatial} for controller ID {speakerToy.ControllerId}.");
         }
 
         /// <summary>
-        /// Evaluates the current playback queue and initiates playback of the next clip if available.
+        /// Sets position in the 3D world for the speaker.
         /// </summary>
-        /// <remarks>
-        /// If no audio is currently playing and queued samples are present, the next item is dequeued and played.  
-        /// If the queue is empty and playback is idle, triggers the <see cref="QueueEmpty"/> event to signal queue completion.
-        /// </remarks>
-        private void CheckQueue()
+        /// <param name="position">
+        /// New position of the speaker in the 3D context.
+        /// </param>
+        public void SetPosition(Vector3 position)
         {
-            if (!isPlaying && audioQueue.Count > 0)
-            {
-                var (samples, loop) = audioQueue.Dequeue();
-                Play(samples, loop);
-            }
-            else if (!isPlaying && audioQueue.Count == 0)
-            {
-                QueueEmpty?.Invoke();
-            }
+            speakerToy.Position = position;
+            Log.Debug($"[DefaultSpeakerToyAdapter] Set position to {position} for controller ID {speakerToy.ControllerId}.");
+        }
+
+        /// <summary>
+        /// Gets the current playback position in seconds.
+        /// </summary>
+        public float GetPlaybackPosition()
+        {
+            var transmitter = SpeakerToy.GetTransmitter(speakerToy.ControllerId);
+            return transmitter != null ? transmitter.CurrentPosition / (float)AudioTransmitter.SampleRate : 0f;
         }
 
         /// <summary>
         /// Smoothly interpolates the speaker volume from <paramref name="startVolume"/> to <paramref name="endVolume"/> over the specified duration.
-        /// This coroutine uses <c>MEC</c>'s <c>IEnumerator&lt;float&gt;</c> to yield frame-by-frame for volume transitions.
+        /// This coroutine uses <c>MEC</c>'s <c>IEnumerator<float></c> to yield frame-by-frame for volume transitions.
         /// </summary>
         /// <param name="startVolume">Starting volume level (0.0 for mute, 1.0 for max).</param>
         /// <param name="endVolume">Target volume level.</param>
@@ -309,6 +322,7 @@
         /// Whether to stop audio playback after the fade completes.
         /// If <c>true</c>, the speaker will stop after reaching <paramref name="endVolume"/>.
         /// </param>
+        /// <param name="onComplete">Optional callback invoked when the fade completes.</param>
         /// <remarks>
         /// This method is designed to be run as a coroutine using <c>MEC.Timing.RunCoroutine</c>.
         /// Recommended for dynamic volume transitions such as fade-ins, fade-outs, or scripted events.
