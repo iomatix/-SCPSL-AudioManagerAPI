@@ -15,7 +15,7 @@ A lightweight, reusable C# library for managing audio playback in SCP: Secret La
 
 - **Spatial Audio**: Play audio at specific world positions with customizable volume, range, and spatialization.
 - **Global Audio**: Broadcast audio to all players, ideal for announcements or events.
-- **Player Filters**: Restrict audio to specific players based on role, zone, or room using `ISpeakerWithPlayerFilter`.
+- **Player Filters**: Restrict audio to specific players based on role, team, room, or custom conditions using `AudioFilters`.
 - **Thread-Safe Management**: Handles concurrent audio operations with a shared, thread-safe speaker registry.
 - **Controller ID System**: Integrates with `ControllerIdManager` for unique speaker IDs (1-255) across plugins.
 - **Audio Caching**: Uses `AudioCache` with LRU eviction for efficient audio sample management.
@@ -28,7 +28,7 @@ A lightweight, reusable C# library for managing audio playback in SCP: Secret La
 Install the `SCPSL-AudioManagerAPI` package via NuGet:
 
 ```bash
-dotnet add package SCPSL-AudioManagerAPI --version 1.4.2
+dotnet add package SCPSL-AudioManagerAPI --version 1.5.0
 ```
 
 Ensure you have the following dependencies in your SCP:SL plugin project:
@@ -48,7 +48,7 @@ Example `.csproj` snippet:
     <TargetFramework>net48</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="SCPSL-AudioManagerAPI" Version="1.4.2" />
+    <PackageReference Include="SCPSL-AudioManagerAPI" Version="1.5.0" />
     <Reference Include="LabApi">
       <HintPath>path\to\LabApi.dll</HintPath>
     </Reference>
@@ -306,6 +306,166 @@ public class CustomAudioManager
 }
 ```
 
+### 5. Using Audio Filters
+
+The `AudioFilters` class in the `AudioManagerAPI.Features.Filters` namespace provides predefined filters to control which players hear audio from a speaker. These filters are accessible via `StaticSpeakerFactory.AudioFilters` for convenience and can be used with `ISpeakerWithPlayerFilter.SetValidPlayers` to target specific players based on role, team, position, room, or custom conditions. Filters can be combined to create complex audio playback scenarios, such as playing audio only to certain roles in specific rooms during events like blackouts.
+
+#### Available Filters
+- `ByRole(RoleTypeId roleType)`: Filters players by their role (e.g., `RoleTypeId.Scp173`).
+- `ByTeam(Team team)`: Filters players by their team (e.g., `Team.SCP`).
+- `ByDistance(Vector3 position, float maxDistance)`: Filters players within a specified distance from a position.
+- `IsAlive()`: Filters players who are alive.
+- `IsInRoomWhereLightsAre(bool lightsEnabled)`: Filters players in rooms with lights enabled (`true`) or disabled (`false`).
+- `IsConditionTrue(bool condition)`: Filters players based on a boolean condition (e.g., event active).
+- `IsInRoom(RoomName roomType)`: Filters players in a specific room type (e.g., `RoomName.EzIntercom`).
+
+#### Example: Playing Audio for SCPs During a Blackout
+This example plays audio only to SCP players who are alive and in a dark room during a blackout event.
+
+```csharp
+using AudioManagerAPI.Features.Static;
+using UnityEngine;
+using LabApi.Features.Console;
+using LabApi.Features.Wrappers;
+using MapGeneration;
+using PlayerRoles;
+
+public class BlackoutAudioPlugin
+{
+    public void PlayBlackoutSound(Vector3 position)
+    {
+        byte controllerId = 1;
+        ISpeaker speaker = StaticSpeakerFactory.GetSpeaker(controllerId) ?? StaticSpeakerFactory.CreateSpeaker(position, controllerId);
+
+        if (speaker != null && speaker is ISpeakerWithPlayerFilter filterSpeaker)
+        {
+            float[] audioSamples = GetAudioSamples(); // Assume method to get PCM samples
+            bool isBlackoutActive = true; // Example: Check blackout event state
+            filterSpeaker.SetValidPlayers(new[]
+            {
+                StaticSpeakerFactory.AudioFilters.ByTeam(Team.SCP),
+                StaticSpeakerFactory.AudioFilters.IsAlive(),
+                StaticSpeakerFactory.AudioFilters.IsInRoomWhereLightsAre(false),
+                StaticSpeakerFactory.AudioFilters.IsConditionTrue(isBlackoutActive)
+            });
+            speaker.Play(audioSamples, loop: false);
+            speaker.SetVolume(0.8f);
+            speaker.SetSpatialization(true);
+            speaker.SetMaxDistance(20f);
+            Logger.Info($"[BlackoutAudioPlugin] Playing blackout sound for SCPs at position {position}.");
+        }
+        else
+        {
+            Logger.Warn($"[BlackoutAudioPlugin] Failed to get or create speaker for controller ID {controllerId}.");
+        }
+    }
+
+    public void OnRoundEnded()
+    {
+        StaticSpeakerFactory.ClearSpeakers();
+        Logger.Info("[BlackoutAudioPlugin] Cleared all speakers for round restart.");
+    }
+}
+```
+
+#### Example: Playing Audio in a Specific Room
+This example plays audio only to players in the EZ Intercom room who are alive.
+
+```csharp
+using AudioManagerAPI.Features.Static;
+using UnityEngine;
+using LabApi.Features.Console;
+using LabApi.Features.Wrappers;
+using MapGeneration;
+
+public class IntercomAudioPlugin
+{
+    public void PlayIntercomSound(Vector3 position)
+    {
+        byte controllerId = 2;
+        ISpeaker speaker = StaticSpeakerFactory.GetSpeaker(controllerId) ?? StaticSpeakerFactory.CreateSpeaker(position, controllerId);
+
+        if (speaker != null && speaker is ISpeakerWithPlayerFilter filterSpeaker)
+        {
+            float[] audioSamples = GetAudioSamples(); // Assume method to get PCM samples
+            filterSpeaker.SetValidPlayers(new[]
+            {
+                StaticSpeakerFactory.AudioFilters.IsInRoom(RoomName.EzIntercom),
+                StaticSpeakerFactory.AudioFilters.IsAlive()
+            });
+            speaker.Play(audioSamples, loop: false);
+            speaker.SetVolume(0.9f);
+            speaker.SetSpatialization(true);
+            speaker.SetMaxDistance(15f);
+            Logger.Info($"[IntercomAudioPlugin] Playing sound in EZ Intercom at position {position}.");
+        }
+        else
+        {
+            Logger.Warn($"[IntercomAudioPlugin] Failed to get or create speaker for controller ID {controllerId}.");
+        }
+    }
+
+    public void OnRoundEnded()
+    {
+        StaticSpeakerFactory.ClearSpeakers();
+        Logger.Info("[IntercomAudioPlugin] Cleared all speakers for round restart.");
+    }
+}
+```
+
+#### Example: Proximity-Based Audio for Scientists
+This example plays audio only to Scientists within 10 units of the speaker’s position.
+
+```csharp
+using AudioManagerAPI.Features.Static;
+using UnityEngine;
+using LabApi.Features.Console;
+using LabApi.Features.Wrappers;
+using PlayerRoles;
+
+public class ProximityAudioPlugin
+{
+    public void PlayProximitySound(Vector3 position)
+    {
+        byte controllerId = 3;
+        ISpeaker speaker = StaticSpeakerFactory.GetSpeaker(controllerId) ?? StaticSpeakerFactory.CreateSpeaker(position, controllerId);
+
+        if (speaker != null && speaker is ISpeakerWithPlayerFilter filterSpeaker)
+        {
+            float[] audioSamples = GetAudioSamples(); // Assume method to get PCM samples
+            filterSpeaker.SetValidPlayers(new[]
+            {
+                StaticSpeakerFactory.AudioFilters.ByRole(RoleTypeId.Scientist),
+                StaticSpeakerFactory.AudioFilters.ByDistance(position, 10f)
+            });
+            speaker.Play(audioSamples, loop: false);
+            speaker.SetVolume(0.7f);
+            speaker.SetSpatialization(true);
+            speaker.SetMaxDistance(10f);
+            Logger.Info($"[ProximityAudioPlugin] Playing sound for Scientists near position {position}.");
+        }
+        else
+        {
+            Logger.Warn($"[ProximityAudioPlugin] Failed to get or create speaker for controller ID {controllerId}.");
+        }
+    }
+
+    public void OnRoundEnded()
+    {
+        StaticSpeakerFactory.ClearSpeakers();
+        Logger.Info("[ProximityAudioPlugin] Cleared all speakers for round restart.");
+    }
+}
+```
+
+#### Notes on Using AudioFilters
+- **Accessing Filters**: Use `StaticSpeakerFactory.AudioFilters` to access the predefined filters, which are defined in `AudioManagerAPI.Features.Filters.AudioFilters`.
+- **Combining Filters**: Pass multiple filters to `SetValidPlayers(IEnumerable<Func<Player, bool>>)`. A player must pass all filters to hear the audio.
+- **Performance**: Filters like `ByDistance` involve calculations. Cache the position parameter if used frequently (e.g., per frame for many players).
+- **Thread Safety**: Filters are stateless and thread-safe, compatible with the thread-safe `StaticSpeakerFactory` and `DefaultSpeakerFactory`.
+- **Logging**: Filters include logging for edge cases (e.g., null players or rooms) using `LabApi.Features.Console.Logger`. Check logs for debugging.
+- **Custom Filters**: For scenarios not covered by predefined filters, use `SetValidPlayers` with a custom `Func<Player, bool>` (e.g., `p => p.CurrentRoom?.Zone == "HeavyContainmentZone"`).
+
 ## Extension Methods
 
 The `AudioManagerAPI` provides extension methods for `IAudioManager` to simplify common operations:
@@ -374,6 +534,7 @@ public void ManageSpeakers()
 | `DefaultSpeakerToyAdapter` | `AudioManagerAPI.Defaults`          | Default LabAPI `SpeakerToy` adapter with full feature support.               |
 | `DefaultSpeakerFactory`  | `AudioManagerAPI.Defaults`            | Instantiable factory for creating and managing `DefaultSpeakerToyAdapter` instances with a thread-safe registry. |
 | `StaticSpeakerFactory`   | `AudioManagerAPI.Features.Static`     | Static wrapper around `DefaultSpeakerFactory` for simplified speaker management, aligned with global `ControllerIdManager`. |
+| `AudioFilters`           | `AudioManagerAPI.Features.Filters`    | Provides predefined filters for controlling which players hear audio based on role, team, position, room, or custom conditions. |
 | `SpeakerState`           | `AudioManagerAPI.Speakers.State`      | Stores persistent speaker state for recovery (position, volume, queued clips). |
 
 ### Important Methods
@@ -384,6 +545,7 @@ public void ManageSpeakers()
 - `ISpeaker.Play`: Plays audio samples with optional looping.
 - `ISpeakerWithPlayerFilter.SetValidPlayers`: Sets a filter to control which players hear the audio.
 - `StaticSpeakerFactory.ClearSpeakers`: Clears all registered speakers.
+- `StaticSpeakerFactory.AudioFilters.*`: Provides predefined filters for role, team, distance, room, and custom conditions.
 
 ## Events
 
@@ -395,21 +557,18 @@ public void ManageSpeakers()
 
 - **Controller ID Synchronization**: `ControllerIdManager` ensures no ID conflicts by maintaining a shared pool of IDs (1-255). High-priority audio can evict lower-priority speakers or be queued for later allocation.
 - **Speaker Lifecycle Management**: Use `StaticSpeakerFactory` or `DefaultSpeakerFactory` methods (`GetSpeaker`, `RemoveSpeaker`, `ClearSpeakers`) to manage speakers. Call `ClearSpeakers` on round restarts to prevent memory leaks.
-- **Thread Safety**: All operations (ID allocation, caching, speaker management) are thread-safe using locks.
+- **Thread Safety**: All operations (ID allocation, caching, speaker management, filters) are thread-safe using locks.
 - **Dependencies**: Requires `UnityEngine.CoreModule`, `LabApi`, and `MEC`. Fully compatible with LabAPI’s `Player` and `SpeakerToy` classes, aligning with Northwood’s SCP:SL ecosystem. No Exiled dependencies are used.
 - **Logging**: Uses `LabApi.Features.Console.Logger` for debugging. Integrate with your plugin’s logging system for additional context.
 - **Spatial Audio**: Use `isSpatial: true` for positional effects (e.g., zone-specific sounds) and `isSpatial: false` for global sounds (e.g., announcements). Non-spatial audio defaults to `Vector3.zero`.
 - **Fading and Queuing**: Use `FadeInAudio`/`FadeOutAudio` for smooth transitions, `ClearSpeakerQueue` to reset queues, and `GetQueueStatus` to monitor queue state.
 - **Persistent Speakers**: Use `persistent: true` to retain speaker state (position, volume, queued clips, playback position) for recovery via `RecoverSpeaker`, validated by `ValidateState`.
 - **Playback Position**: For persistent speakers, playback position is approximated by trimming samples, as `AudioTransmitter` does not natively support seeking.
-- **Player Filters**: Use `ISpeakerWithPlayerFilter.SetValidPlayers` to control which players hear audio. Examples:
-  - Play audio in a specific zone: `p => p.CurrentRoom?.Zone == "HeavyContainmentZone"`.
-  - Play audio for specific roles: `p => p.Role.ToString() == "Scientist"`.
-  - Play audio in specific rooms: `p => p.CurrentRoom?.Name == "HCZ_079"`.
+- **Player Filters**: Use `StaticSpeakerFactory.AudioFilters` or custom `Func<Player, bool>` with `ISpeakerWithPlayerFilter.SetValidPlayers` to control which players hear audio.
 
 ## Contributing
 
-Contributions are welcome! Please submit pull requests or issues to the [GitHub repository](https://github.com/your-repo/SCPSL-AudioManagerAPI). Ensure code follows SCP:SL plugin conventions and includes tests for new features.
+Contributions are welcome! Please submit pull requests or issues to the [GitHub repository](https://github.com/ioMatix/-SCPSL-AudioManagerAPI). Ensure code follows SCP:SL plugin conventions and includes tests for new features.
 
 ## License
 
