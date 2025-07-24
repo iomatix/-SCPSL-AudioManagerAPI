@@ -1,11 +1,11 @@
 # SCPSL-AudioManagerAPI
 
 [![NuGet Version](https://img.shields.io/nuget/v/SCPSL-AudioManagerAPI.svg)](https://www.nuget.org/packages/SCPSL-AudioManagerAPI/)  
-A lightweight, reusable C# library for managing audio playback in SCP: Secret Laboratory (SCP:SL) plugins using LabAPI. It provides a robust system for loading, caching, and playing audio through `SpeakerToy` instances, with centralized controller ID management, advanced audio control (volume, position, range, spatialization, fading, queuing), and prioritization for enhanced gameplay.
+A lightweight, reusable C# library for managing audio playback in SCP: Secret Laboratory (SCP:SL) plugins using LabAPI. Designed to integrate seamlessly with Northwood’s LabAPI ecosystem, it provides a robust system for loading, caching, and playing audio through `SpeakerToy` instances, with centralized controller ID management, advanced audio control (volume, position, range, spatialization, fading, queuing), speaker lifecycle management, and prioritization for enhanced gameplay.
 
 > ⚠️ **Warning**  
 > This plugin is currently in active development. New features are being added regularly, and not all functionality has been fully tested in live gameplay.  
-> If you encounter any issues or bugs, please report them on the [official GitHub repository](https://github.com/iomatix/-SCPSL-AudioManagerAPI/issues).
+> If you encounter any issues or bugs, please report them on the [official GitHub repository](https://github.com/ioMatix/-SCPSL-AudioManagerAPI/issues).
 
 ## Features
 
@@ -17,8 +17,9 @@ A lightweight, reusable C# library for managing audio playback in SCP: Secret La
 - **Audio Prioritization**: Supports Low, Medium, and High priorities, with queuing for high-priority audio when IDs are limited.
 - **Pause/Resume/Skip**: Pause, resume, or skip audio clips, including queued clips, for dynamic control.
 - **Persistent Speakers**: Save and recover speaker states (position, volume, queued clips, playback position) for seamless recovery after eviction or scene reloads.
+- **Speaker Lifecycle Management**: Create, retrieve, remove, and clear speakers using `ISpeakerFactory`, with methods to get existing speakers by `controllerId` and clean up resources on round restarts.
 - **Thread-Safe Operations**: Handles concurrent audio playback, caching, and ID allocation safely.
-- **LabAPI Compatibility**: Optimized for SCP:SL, integrating seamlessly with `SpeakerToy` for spatial and global audio playback.
+- **LabAPI Integration**: Optimized for SCP:SL using LabAPI’s `SpeakerToy` and `Player` classes, aligning with Northwood’s default SCP:SL ecosystem without Exiled dependencies.
 - **Default System**: Simplifies usage with `DefaultAudioManager`, offering plug-and-play methods for common audio tasks.
 
 ## Installation
@@ -33,7 +34,7 @@ Or, in Visual Studio, use the NuGet Package Manager to search for `SCPSL-AudioMa
 
 ## Project Setup
 
-Add the `SCPSL-AudioManagerAPI` package to your SCP:SL plugin project. Ensure you reference `UnityEngine.CoreModule` for `Vector3`, `LabApi` for `SpeakerToy`, and `MEC` for coroutines (used for fading and lifespan management).
+Add the `SCPSL-AudioManagerAPI` package to your SCP:SL plugin project. Ensure you reference `UnityEngine.CoreModule` for `Vector3`, `LabApi` for `SpeakerToy` and `Player`, and `MEC` for coroutines (used for fading and lifespan management).
 
 Example `.csproj` snippet:
 
@@ -66,32 +67,103 @@ The `DefaultAudioManager` provides a plug-and-play interface for common audio ta
 ```csharp
 using AudioManagerAPI.Defaults;
 using UnityEngine;
+using LabApi.Features.Console;
 
-// At plugin startup
-DefaultAudioManager.RegisterDefaults(cacheSize: 50);
+public class AudioPlugin
+{
+    // At plugin startup
+    public void Initialize()
+    {
+        DefaultAudioManager.RegisterDefaults(cacheSize: 50);
 
-// Register audio
-DefaultAudioManager.RegisterAudio("explosionSound", () => Assembly.GetExecutingAssembly().GetManifestResourceStream("MyPlugin.Audio.explosion.wav"));
+        // Register audio
+        DefaultAudioManager.RegisterAudio("explosionSound", () => Assembly.GetExecutingAssembly().GetManifestResourceStream("MyPlugin.Audio.explosion.wav"));
+    }
 
-// Play audio globally with default settings (non-spatial, full volume, no looping)
-byte id = DefaultAudioManager.Play("explosionSound");
+    public void PlayAudio()
+    {
+        // Play audio globally with default settings (non-spatial, full volume, no looping)
+        byte id = DefaultAudioManager.Play("explosionSound");
 
-// Play and queue another clip
-DefaultAudioManager.Play("screamSound", queue: true);
+        // Play and queue another clip
+        DefaultAudioManager.Play("screamSound", queue: true);
 
-// Control playback
-DefaultAudioManager.FadeIn(id, 2f); // Fade in over 2 seconds
-DefaultAudioManager.Pause(id);
-DefaultAudioManager.Resume(id);
-DefaultAudioManager.Skip(id, 1); // Skip current clip
-DefaultAudioManager.SetVolume(id, 0.5f); // Adjust volume
-DefaultAudioManager.SetPosition(id, new Vector3(10f, 0f, 0f)); // Move speaker
-DefaultAudioManager.ClearQueue(id); // Clear queued clips
-DefaultAudioManager.FadeOut(id, 2f); // Fade out and stop
-DefaultAudioManager.Stop(id); // Stop and destroy speaker
+        // Control playback
+        DefaultAudioManager.FadeIn(id, 2f); // Fade in over 2 seconds
+        DefaultAudioManager.Pause(id);
+        DefaultAudioManager.Resume(id);
+        DefaultAudioManager.Skip(id, 1); // Skip current clip
+        DefaultAudioManager.SetVolume(id, 0.5f); // Adjust volume
+        DefaultAudioManager.SetPosition(id, new Vector3(10f, 0f, 0f)); // Move speaker
+        DefaultAudioManager.ClearQueue(id); // Clear queued clips
+        DefaultAudioManager.FadeOut(id, 2f); // Fade out and stop
+        DefaultAudioManager.Stop(id); // Stop and destroy speaker
+    }
+}
 ```
 
-### 2. Extension Methods
+### 2. Using DefaultSpeakerFactory
+
+The `DefaultSpeakerFactory` allows creating and managing `DefaultSpeakerToyAdapter` instances, with support for retrieving and removing speakers by `controllerId`.
+
+```csharp
+using AudioManagerAPI.Defaults;
+using AudioManagerAPI.Features.Speakers;
+using UnityEngine;
+using LabApi.Features.Console;
+
+public class AudioPlugin
+{
+    private readonly ISpeakerFactory speakerFactory;
+
+    public AudioPlugin()
+    {
+        speakerFactory = new DefaultSpeakerFactory();
+    }
+
+    public void PlayAudio()
+    {
+        byte controllerId = 1;
+        Vector3 position = new Vector3(10f, 0f, 0f); // Example position
+        // Get or create a speaker
+        ISpeaker speaker = speakerFactory.GetSpeaker(controllerId) ?? speakerFactory.CreateSpeaker(position, controllerId);
+
+        if (speaker != null)
+        {
+            float[] audioSamples = GetAudioSamples(); // Assume method to get PCM samples
+            speaker.Play(audioSamples, loop: false);
+            speaker.SetVolume(0.8f);
+            speaker.SetSpatialization(true);
+            speaker.SetMaxDistance(20f);
+            Logger.Info($"[AudioPlugin] Playing audio with controller ID {controllerId}.");
+        }
+        else
+        {
+            Logger.Warn($"[AudioPlugin] Failed to get or create speaker for controller ID {controllerId}.");
+        }
+    }
+
+    public void RemoveSpeaker(byte controllerId)
+    {
+        if (speakerFactory.RemoveSpeaker(controllerId))
+        {
+            Logger.Info($"[AudioPlugin] Removed speaker for controller ID {controllerId}.");
+        }
+        else
+        {
+            Logger.Warn($"[AudioPlugin] No speaker found for controller ID {controllerId} to remove.");
+        }
+    }
+
+    public void OnRoundEnded()
+    {
+        speakerFactory.ClearSpeakers(); // Clean up all speakers on round end
+        Logger.Info("[AudioPlugin] Cleared all speakers for round restart.");
+    }
+}
+```
+
+### 3. Extension Methods
 
 The `SpeakerExtensions` class provides extension methods for `ISpeaker` instances, allowing for easy configuration and lifecycle management.
 
@@ -100,6 +172,8 @@ The `SpeakerExtensions` class provides extension methods for `ISpeaker` instance
 Configures volume, position, range, spatialization, and player filters.
 
 ```csharp
+using LabApi.Player;
+
 speaker.Configure(volume: 0.8f, minDistance: 5f, maxDistance: 50f, isSpatial: true, configureSpeaker: customConfig, playerFilter: p => Player.ReadyList.Contains(p));
 ```
 
@@ -151,14 +225,17 @@ Validates a persistent speaker’s state for consistency.
 bool isValid = state.ValidateState();
 ```
 
-### 3. Implement ISpeaker and ISpeakerFactory (Advanced)
+### 4. Implement ISpeaker and ISpeakerFactory (Advanced)
 
 For custom speaker implementations, create a class compatible with LabAPI's `SpeakerToy`. Example:
 
 ```csharp
 using AudioManagerAPI.Features.Speakers;
 using LabApi.Features.Wrappers;
+using LabApi.Features.Console;
 using UnityEngine;
+using LabApi.Player;
+using System;
 
 public class LabApiSpeaker : ISpeakerWithPlayerFilter
 {
@@ -187,7 +264,7 @@ public class LabApiSpeaker : ISpeakerWithPlayerFilter
                 int skipSamples = Mathf.FloorToInt(playbackPosition * AudioTransmitter.SampleRate);
                 if (skipSamples >= samples.Length)
                 {
-                    Log.Warn($"[LabApiSpeaker] Playback position {playbackPosition}s exceeds clip length.");
+                    Logger.Warn($"[LabApiSpeaker] Playback position {playbackPosition}s exceeds clip length.");
                     return;
                 }
                 float[] trimmedSamples = new float[samples.Length - skipSamples];
@@ -329,14 +406,53 @@ public class LabApiSpeakerFactory : ISpeakerFactory
     public ISpeaker CreateSpeaker(Vector3 position, byte controllerId)
     {
         SpeakerToy speaker = SpeakerToy.Create(position, networkSpawn: true);
-        if (speaker == null) return null;
+        if (speaker == null)
+        {
+            Logger.Warn($"[LabApiSpeakerFactory] Failed to create SpeakerToy for controller ID {controllerId}.");
+            return null;
+        }
         speaker.ControllerId = controllerId;
+        Logger.Info($"[LabApiSpeakerFactory] Created speaker for controller ID {controllerId}.");
         return new LabApiSpeaker(speaker);
+    }
+
+    public ISpeaker GetSpeaker(byte controllerId)
+    {
+        SpeakerToy speakerToy = SpeakerToy.List.FirstOrDefault(toy => toy.ControllerId == controllerId);
+        if (speakerToy != null)
+        {
+            Logger.Info($"[LabApiSpeakerFactory] Found existing SpeakerToy for controller ID {controllerId}.");
+            return new LabApiSpeaker(speakerToy);
+        }
+        Logger.Warn($"[LabApiSpeakerFactory] No speaker found for controller ID {controllerId}.");
+        return null;
+    }
+
+    public bool RemoveSpeaker(byte controllerId)
+    {
+        SpeakerToy speakerToy = SpeakerToy.List.FirstOrDefault(toy => toy.ControllerId == controllerId);
+        if (speakerToy != null)
+        {
+            speakerToy.Destroy();
+            Logger.Info($"[LabApiSpeakerFactory] Removed speaker for controller ID {controllerId}.");
+            return true;
+        }
+        Logger.Warn($"[LabApiSpeakerFactory] No speaker found for controller ID {controllerId} to remove.");
+        return false;
+    }
+
+    public void ClearSpeakers()
+    {
+        foreach (var speakerToy in SpeakerToy.List.ToList())
+        {
+            speakerToy.Destroy();
+        }
+        Logger.Info("[LabApiSpeakerFactory] Cleared all speakers.");
     }
 }
 ```
 
-### 4. Initialize AudioManager (Advanced)
+### 5. Initialize AudioManager (Advanced)
 
 Create an instance of `AudioManager` for advanced control.
 
@@ -346,6 +462,8 @@ using AudioManagerAPI.Features.Management;
 using System;
 using System.Reflection;
 using UnityEngine;
+using LabApi.Features.Console;
+using LabApi.Player;
 
 public class MyPluginAudioManager
 {
@@ -378,7 +496,7 @@ public class MyPluginAudioManager
         {
             audioManager.FadeInAudio(controllerId, 1f);
             audioManager.SetSpeakerPosition(controllerId, new Vector3(position.x + 5f, position.y, position.z));
-            Log.Info($"Played scream with controller ID {controllerId}.");
+            Logger.Info($"[MyPluginAudioManager] Played scream with controller ID {controllerId}.");
         }
     }
 
@@ -390,17 +508,19 @@ public class MyPluginAudioManager
         {
             audioManager.FadeInAudio(controllerId, 1f);
             audioManager.ClearSpeakerQueue(controllerId);
-            Log.Info($"Played global scream with controller ID {controllerId}.");
+            Logger.Info($"[MyPluginAudioManager] Played global scream with controller ID {controllerId}.");
         }
     }
 }
 ```
 
-### 5. Manage Speakers
+### 6. Manage Speakers
 
 Control audio playback with advanced features.
 
 ```csharp
+using LabApi.Features.Console;
+
 // Pause and resume
 audioManager.PauseAudio(controllerId);
 audioManager.ResumeAudio(controllerId);
@@ -446,6 +566,8 @@ The `AudioCache` class processes WAV files with the following specifications:
 - **Fading**: Smoothly transition volume with `FadeInAudio` and `FadeOutAudio` for immersive effects.
 - **Queuing**: Queue multiple clips to play sequentially, with optional looping, clearing (`ClearSpeakerQueue`), and status checking (`GetQueueStatus`).
 - **Persistence**: Use `persistent: true` to retain speaker state (position, volume, queued clips, playback position) for recovery via `RecoverSpeaker`.
+- **Speaker Management**: Retrieve existing speakers with `ISpeakerFactory.GetSpeaker`, remove individual speakers with `RemoveSpeaker`, or clear all speakers with `ClearSpeakers` for round restarts.
+- **Player Filters**: Use `ISpeakerWithPlayerFilter.SetValidPlayers` with LabAPI’s `Player` class to control which players hear audio (e.g., `p => Player.ReadyList.Contains(p)` or `p => p.Role == RoleType.Scp173`).
 
 > **Note**: `GetQueueStatus` returns the current clip key only for persistent speakers (via `SpeakerState.QueuedClips`). For non-persistent speakers, the current clip key is `null`.
 
@@ -459,13 +581,13 @@ The `AudioCache` class processes WAV files with the following specifications:
 | `AudioManager`           | `AudioManagerAPI.Features.Management` | Implements audio management with caching and shared controller IDs.          |
 | `ISpeaker`               | `AudioManagerAPI.Features.Speakers`   | Represents a speaker for playing, queuing, pausing, resuming, skipping, and fading audio. |
 | `ISpeakerWithPlayerFilter` | `AudioManagerAPI.Features.Speakers`   | Extends `ISpeaker` to support player-specific audibility, volume, position, range, and spatialization. |
-| `ISpeakerFactory`        | `AudioManagerAPI.Features.Speakers`   | Defines a factory for creating speaker instances.                            |
+| `ISpeakerFactory`        | `AudioManagerAPI.Features.Speakers`   | Defines a factory for creating and managing speaker instances.               |
 | `AudioCache`             | `AudioManagerAPI.Cache`               | Manages audio samples with LRU eviction and lazy loading.                    |
 | `ControllerIdManager`    | `AudioManagerAPI.Controllers`         | Static class for managing unique controller IDs with priority-based eviction and queuing. |
 | `AudioPriority`          | `AudioManagerAPI.Features.Enums`      | Enum defining audio priority levels (Low, Medium, High).                     |
 | `DefaultAudioManager`    | `AudioManagerAPI.Defaults`            | Simplifies audio management with default settings and convenience methods.   |
 | `DefaultSpeakerToyAdapter` | `AudioManagerAPI.Defaults`          | Default LabAPI `SpeakerToy` adapter with full feature support.               |
-| `DefaultSpeakerFactory`  | `AudioManagerAPI.Defaults`            | Creates `DefaultSpeakerToyAdapter` instances for default usage.              |
+| `DefaultSpeakerFactory`  | `AudioManagerAPI.Defaults`            | Creates and manages `DefaultSpeakerToyAdapter` instances with speaker retrieval and cleanup. |
 | `SpeakerState`           | `AudioManagerAPI.Speakers.State`      | Stores persistent speaker state for recovery (position, volume, queued clips). |
 
 ### Important Methods
@@ -486,6 +608,10 @@ The `AudioCache` class processes WAV files with the following specifications:
 - **`IAudioManager.StopAudio(byte controllerId)`**: Stops audio playback.
 - **`IAudioManager.DestroySpeaker(byte controllerId, bool forceRemoveState)`**: Destroys a speaker and releases its ID.
 - **`IAudioManager.CleanupAllSpeakers()`**: Cleans up all active speakers and releases their IDs.
+- **`ISpeakerFactory.CreateSpeaker(Vector3 position, byte controllerId)`**: Creates a speaker at the specified position with a unique controller ID.
+- **`ISpeakerFactory.GetSpeaker(byte controllerId)`**: Retrieves an existing speaker by its controller ID.
+- **`ISpeakerFactory.RemoveSpeaker(byte controllerId)`**: Removes a speaker from management, destroying its resources.
+- **`ISpeakerFactory.ClearSpeakers()`**: Clears all managed speakers, typically for round restarts.
 - **`SpeakerExtensions.Configure(ISpeaker, float volume, float minDistance, float maxDistance, bool isSpatial, Action<ISpeaker> configureSpeaker, Func<Player, bool> playerFilter)`**: Configures speaker settings.
 - **`SpeakerExtensions.SetVolume(ISpeaker, float volume)`**: Sets the speaker’s volume.
 - **`SpeakerExtensions.SetPosition(ISpeaker, Vector3 position)`**: Sets the speaker’s position.
@@ -510,13 +636,15 @@ These events can be used to synchronize UI elements, manage state persistence, o
 ## Notes
 
 - **Controller ID Synchronization**: `ControllerIdManager` ensures no ID conflicts by maintaining a shared pool of IDs (1-255). High-priority audio can evict lower-priority speakers or be queued for later allocation.
+- **Speaker Lifecycle Management**: Use `ISpeakerFactory.GetSpeaker` to retrieve existing speakers, `RemoveSpeaker` to clean up individual speakers, and `ClearSpeakers` to reset all speakers on round restarts to prevent memory leaks. These methods are implemented in `DefaultSpeakerFactory` and `LabApiSpeakerFactory` for robust speaker management.
 - **Thread Safety**: All operations (ID allocation, caching, speaker management) are thread-safe using locks.
-- **Dependencies**: Requires `UnityEngine.CoreModule`, `LabApi`, and `MEC`. Ensure these are available in your SCP:SL environment.
-- **Logging**: Uses `LabApi.Features.Console.Logger` for debugging. Integrate with your plugin’s logging system (e.g., Exiled’s `Log`) for additional context.
+- **Dependencies**: Requires `UnityEngine.CoreModule`, `LabApi`, and `MEC`. Fully compatible with LabAPI’s `Player` and `SpeakerToy` classes, aligning with Northwood’s SCP:SL ecosystem. No Exiled dependencies are used.
+- **Logging**: Uses `LabApi.Features.Console.Logger` for debugging. Integrate with your plugin’s logging system for additional context.
 - **Spatial Audio**: Use `isSpatial: true` for positional effects (e.g., screams) and `isSpatial: false` for ambient sounds (e.g., background music). Non-spatial audio defaults to `Vector3.zero` for global playback.
 - **Fading and Queuing**: Use `FadeInAudio`/`FadeOutAudio` for smooth transitions, `ClearSpeakerQueue` to reset queues, and `GetQueueStatus` to monitor queue state.
 - **Persistent Speakers**: Use `persistent: true` to retain speaker state (position, volume, queued clips, playback position) for recovery via `RecoverSpeaker`, validated by `ValidateState`.
 - **Playback Position**: For persistent speakers, playback position is approximated by trimming samples, as `AudioTransmitter` does not natively support seeking.
+- **Player Filters**: Use `ISpeakerWithPlayerFilter.SetValidPlayers` with LabAPI’s `Player` class to control which players hear audio (e.g., `p => Player.ReadyList.Contains(p)` or `p => p.Role == RoleType.Scp173`).
 
 ## Contributing
 
