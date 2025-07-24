@@ -27,7 +27,7 @@ A lightweight, reusable C# library for managing audio playback in SCP: Secret La
 Install the `SCPSL-AudioManagerAPI` package via NuGet:
 
 ```bash
-dotnet add package SCPSL-AudioManagerAPI --version 1.4.0
+dotnet add package SCPSL-AudioManagerAPI --version 1.4.1
 ```
 
 Or, in Visual Studio, use the NuGet Package Manager to search for `SCPSL-AudioManagerAPI`.
@@ -44,7 +44,7 @@ Example `.csproj` snippet:
     <TargetFramework>net48</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="SCPSL-AudioManagerAPI" Version="1.4.0" />
+    <PackageReference Include="SCPSL-AudioManagerAPI" Version="1.4.1" />
     <Reference Include="LabApi">
       <HintPath>path\to\LabApi.dll</HintPath>
     </Reference>
