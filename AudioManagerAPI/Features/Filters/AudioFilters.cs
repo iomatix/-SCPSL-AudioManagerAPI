@@ -114,7 +114,7 @@
                 }
                 if (player.Room == null)
                 {
-                    Log.Warn("IsInRoomWhereLightsAre: Player has no associated room.");
+                    //Log.Warn("IsInRoomWhereLightsAre: Player has no associated room.");
                     return false;
                 }
                 if (player.Room.LightController == null)
