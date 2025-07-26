@@ -1,12 +1,12 @@
 ﻿namespace AudioManagerAPI.Features.Filters
 {
-    using System;
     using AudioManagerAPI.Features.Speakers;
     using LabApi.Features.Wrappers;
     using MapGeneration;
     using PlayerRoles;
+    using System;
+    using System.Linq;
     using UnityEngine;
-
     using Log = LabApi.Features.Console.Logger;
 
     /// <summary>
@@ -98,31 +98,31 @@
             };
         }
 
-        /// <summary>
-        /// Filters players in a room where the lights are in the specified state (enabled or disabled).
-        /// </summary>
-        /// <param name="lightsEnabled">True to filter for rooms with lights enabled, false for lights disabled.</param>
-        /// <returns>A filter function that returns true for players in rooms with the specified light state.</returns>
+        /// <summary>  
+        /// Filters players in a room where the lights are in the specified state (enabled or disabled).  
+        /// </summary>  
+        /// <param name="lightsEnabled">True to filter for rooms with lights enabled, false for lights disabled.</param>  
+        /// <returns>A filter function that returns true for players in rooms with the specified light state.</returns>  
         public static Func<Player, bool> IsInRoomWhereLightsAre(bool lightsEnabled)
         {
             return player =>
             {
-                if (player == null)
+                if (player?.Room == null)
                 {
-                    Log.Warn("IsInRoomWhereLightsAre: Player is null.");
+                    Log.Debug("IsInRoomWhereLightsAre: Player or room is null.");
                     return false;
                 }
-                if (player.Room == null)
+
+                // Check all light controllers in the room  
+                var lightControllers = player.Room.AllLightControllers;
+                if (!lightControllers.Any())
                 {
-                    //Log.Warn("IsInRoomWhereLightsAre: Player has no associated room.");
+                    Log.Debug("IsInRoomWhereLightsAre: Room has no light controllers.");
                     return false;
                 }
-                if (player.Room.LightController == null)
-                {
-                    Log.Warn("IsInRoomWhereLightsAre: Room has no LightController.");
-                    return false;
-                }
-                return player.Room.LightController.LightsEnabled == lightsEnabled;
+
+                // Return true if ALL light controllers match the desired state  
+                return lightControllers.All(lc => lc.LightsEnabled == lightsEnabled);
             };
         }
 
