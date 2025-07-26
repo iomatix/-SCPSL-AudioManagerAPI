@@ -7,7 +7,8 @@
     using System;
     using System.Linq;
     using UnityEngine;
-    using Log = LabApi.Features.Console.Logger;
+
+    using Log = DebugLogger;
 
     /// <summary>
     /// Provides common SCP:SL-specific audio filters for use with <see cref="ISpeaker.SetValidPlayers(Func{Player, bool})"/> or <see cref="ISpeaker.SetValidPlayers(IEnumerable{Func{Player, bool}})"/>.

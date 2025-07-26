@@ -6,7 +6,7 @@
     using System.Linq;
     using UnityEngine;
 
-    using Log = LabApi.Features.Console.Logger;
+    using Log = DebugLogger;
 
     /// <summary>
     /// Default factory that produces <see cref="DefaultSpeakerToyAdapter"/> instances.

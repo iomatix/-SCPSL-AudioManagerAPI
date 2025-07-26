@@ -7,7 +7,7 @@
     using AudioManagerAPI.Features.Enums;
     using AudioManagerAPI.Speakers.State;
 
-    using Log = LabApi.Features.Console.Logger;
+    using Log = DebugLogger;
 
     /// <summary>
     /// Manages audio controller IDs with priority‐based allocation and eviction,

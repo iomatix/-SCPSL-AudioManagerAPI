@@ -11,7 +11,7 @@
     using AudioManagerAPI.Speakers.State;
     using LabApi.Features.Wrappers;
 
-    using Log = LabApi.Features.Console.Logger;
+    using Log = DebugLogger;
     using UnityEngine;
 
     /// <summary>
