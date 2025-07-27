@@ -80,8 +80,27 @@ public class AudioPlugin
 {
     public void Initialize()
     {
-        DefaultAudioManager.RegisterDefaults(cacheSize: 50);
-        DefaultAudioManager.RegisterAudio("ambientSound", () => Assembly.GetExecutingAssembly().GetManifestResourceStream("MyPlugin.Audio.ambient.wav"));
+            
+            // If DefaultAudioManager.Instance is null,
+            // it means there's no existing AudioManager registered.
+            // So, we register the default configuration first with a cache size of 50,
+            // ensuring compatibility when multiple plugins try to initialize audio independently.
+            // RegisterDefaults would override any previous settings, so we only call it once.
+            // Then we register our custom ambient sound stream.
+            // If DefaultAudioManager.Instance is NOT null,
+            // it means another plugin may have already initialized it.
+            // To maintain compatibility, we only register our ambient sound without reinitializing the entire manager.
+            if (DefaultAudioManager.Instance == null)
+            {
+                DefaultAudioManager.RegisterDefaults(cacheSize: 50);
+                DefaultAudioManager.RegisterAudio("ambientSound", () => Assembly.GetExecutingAssembly().GetManifestResourceStream("MyPlugin.Audio.ambient.wav"));
+            }
+            else
+            {
+                DefaultAudioManager.RegisterAudio("ambientSound", () => Assembly.GetExecutingAssembly().GetManifestResourceStream("MyPlugin.Audio.ambient.wav"));
+            }
+        
+        
     }
 
     public void PlayAudio()
