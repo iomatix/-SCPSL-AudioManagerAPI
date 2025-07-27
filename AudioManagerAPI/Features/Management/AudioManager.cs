@@ -40,8 +40,8 @@
         /// </summary>
         /// <param name="speakerFactory">The factory used to create speaker instances.</param>
         /// <param name="cacheSize">The maximum number of audio samples to cache.</param>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="speakerFactory"/> is null.</exception>
-        /// <exception cref="ArgumentException">Thrown if <paramref name="cacheSize"/> is not positive.</exception>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="speakerFactory"/> is null.</exception>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="cacheSize"/> is not positive.</exception>
         public AudioManager(ISpeakerFactory speakerFactory, int cacheSize = 50)
         {
             this.speakerFactory = speakerFactory ?? throw new ArgumentNullException(nameof(speakerFactory));
@@ -108,7 +108,7 @@
                         Priority = priority,
                         ConfigureSpeaker = configureSpeaker,
                         QueuedClips = queue ? new List<(string, bool)> { (key, loop) } : new List<(string, bool)>(),
-                        PlayerFilter = null, // Set below
+                        PlayerFilter = null,
                         Persistent = persistent,
                         Lifespan = lifespan,
                         AutoCleanup = autoCleanup,
@@ -191,6 +191,26 @@
                             state.PlayerFilter = p => Player.ReadyList.Contains(p);
                         }
                     }
+                    FadeInAudio(controllerId, fadeInDuration);
+                }
+            }
+
+            return controllerId;
+        }
+
+        public byte PlayGlobalAudioWithFilter(string key, bool loop, float volume, AudioPriority priority, Action<ISpeaker> configureSpeaker, bool queue = false, float fadeInDuration = 0f, bool persistent = false, float? lifespan = null, bool autoCleanup = false)
+        {
+            if (key == null)
+                throw new ArgumentNullException(nameof(key));
+
+            byte controllerId = PlayAudio(
+                key, Vector3.zero, loop, volume, 0f, 999.99f, false, priority,
+                configureSpeaker, queue, persistent, lifespan, autoCleanup);
+
+            if (controllerId != 0 && fadeInDuration > 0)
+            {
+                lock (lockObject)
+                {
                     FadeInAudio(controllerId, fadeInDuration);
                 }
             }
@@ -404,7 +424,6 @@
                 }
             }
         }
-
 
         public void StopAudio(byte controllerId)
         {

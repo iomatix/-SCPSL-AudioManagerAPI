@@ -9,12 +9,13 @@ A lightweight, reusable C# library for managing audio playback in SCP: Secret La
 
 ## Description
 
-`SCPSL-AudioManagerAPI` is a robust library for managing spatial and global audio in SCP: Secret Laboratory server-side plugins. Built on top of LabAPI’s `SpeakerToy`, it provides a high-level interface for playing audio clips, managing speaker lifecycles, and applying player-specific filters. With thread-safe operations and integration with `ControllerIdManager`, it ensures seamless audio playback across SCP:SL’s multi-threaded environment. The library supports both simple and advanced use cases, from ambient sounds to role-specific announcements, without requiring Exiled dependencies.
+`SCPSL-AudioManagerAPI` is a robust library for managing spatial and global audio in SCP: Secret Laboratory server-side plugins. Built on top of LabAPI’s `SpeakerToy`, it provides a high-level interface for playing audio clips, managing speaker lifecycles, and applying player-specific filters. With thread-safe operations and integration with `ControllerIdManager`, it ensures seamless audio playback across SCP:SL’s multi-threaded environment. The library supports both simple and advanced use cases, from ambient sounds to role-specific announcements, without requiring Exiled dependencies. Version 1.6.0 introduces enhanced filtering for global audio with the `PlayGlobalAudioWithFilter` method and improved documentation distinguishing spatial and non-spatial audio.
 
 ## Features
 
 - **Spatial Audio**: Play audio at specific world positions with customizable volume, range, and spatialization.
 - **Global Audio**: Broadcast audio to all players, ideal for announcements or events.
+- **Global Audio with Filters**: Broadcast audio to specific players using custom filters via `PlayGlobalAudioWithFilter`, perfect for targeted announcements or events.
 - **Player Filters**: Restrict audio to specific players based on role, team, room, or custom conditions using `AudioFilters`.
 - **Thread-Safe Management**: Handles concurrent audio operations with a shared, thread-safe speaker registry.
 - **Controller ID System**: Integrates with `ControllerIdManager` for unique speaker IDs (1-255) across plugins.
@@ -28,7 +29,7 @@ A lightweight, reusable C# library for managing audio playback in SCP: Secret La
 Install the `SCPSL-AudioManagerAPI` package via NuGet:
 
 ```bash
-dotnet add package SCPSL-AudioManagerAPI --version 1.5.2
+dotnet add package SCPSL-AudioManagerAPI --version 1.6.0
 ```
 
 Ensure you have the following dependencies in your SCP:SL plugin project:
@@ -48,7 +49,7 @@ Example `.csproj` snippet:
     <TargetFramework>net48</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="SCPSL-AudioManagerAPI" Version="1.5.2" />
+    <PackageReference Include="SCPSL-AudioManagerAPI" Version="1.6.0" />
     <Reference Include="LabApi">
       <HintPath>path\to\LabApi.dll</HintPath>
     </Reference>
@@ -96,6 +97,37 @@ public class AudioPlugin
         DefaultAudioManager.ClearQueue(id);
         DefaultAudioManager.FadeOut(id, 2f);
         DefaultAudioManager.Stop(id);
+    }
+
+    public void PlayGlobalAudioWithFilter()
+    {
+        byte id = DefaultAudioManager.Instance.PlayGlobalAudioWithFilter(
+            key: "ambientSound",
+            loop: false,
+            volume: 0.8f,
+            priority: AudioPriority.High,
+            configureSpeaker: speaker =>
+            {
+                if (speaker is ISpeakerWithPlayerFilter filterSpeaker)
+                {
+                    filterSpeaker.SetValidPlayers(p => p.Role == RoleTypeId.Scp173);
+                }
+            },
+            queue: false,
+            fadeInDuration: 1f,
+            persistent: true,
+            lifespan: 10f,
+            autoCleanup: true
+        );
+
+        if (id != 0)
+        {
+            Logger.Info($"[AudioPlugin] Played global audio with filter for SCP-173 with controller ID {id}.");
+        }
+        else
+        {
+            Logger.Warn("[AudioPlugin] Failed to play global audio with filter.");
+        }
     }
 }
 ```
@@ -320,10 +352,10 @@ The `AudioFilters` class in the `AudioManagerAPI.Features.Filters` namespace pro
 - `IsInRoom(RoomName roomType)`: Filters players in a specific room type (e.g., `RoomName.EzIntercom`).
 
 #### Example: Playing Audio for SCPs During a Blackout
-This example plays audio only to SCP players who are alive and in a dark room during a blackout event.
+This example plays audio only to SCP players who are alive and in a dark room during a blackout event using `PlayGlobalAudioWithFilter`.
 
 ```csharp
-using AudioManagerAPI.Features.Static;
+using AudioManagerAPI.Defaults;
 using UnityEngine;
 using LabApi.Features.Console;
 using LabApi.Features.Wrappers;
@@ -332,38 +364,42 @@ using PlayerRoles;
 
 public class BlackoutAudioPlugin
 {
-    public void PlayBlackoutSound(Vector3 position)
+    public void PlayBlackoutSound()
     {
-        byte controllerId = 1;
-        ISpeaker speaker = StaticSpeakerFactory.GetSpeaker(controllerId) ?? StaticSpeakerFactory.CreateSpeaker(position, controllerId);
-
-        if (speaker != null && speaker is ISpeakerWithPlayerFilter filterSpeaker)
-        {
-            float[] audioSamples = GetAudioSamples(); // Assume method to get PCM samples
-            bool isBlackoutActive = true; // Example: Check blackout event state
-            filterSpeaker.SetValidPlayers(new[]
+        bool isBlackoutActive = true; // Example: Check blackout event state
+        byte controllerId = DefaultAudioManager.Instance.PlayGlobalAudioWithFilter(
+            key: "blackoutSound",
+            loop: false,
+            volume: 0.8f,
+            priority: AudioPriority.High,
+            configureSpeaker: speaker =>
             {
-                StaticSpeakerFactory.AudioFilters.ByTeam(Team.SCP),
-                StaticSpeakerFactory.AudioFilters.IsAlive(),
-                StaticSpeakerFactory.AudioFilters.IsInRoomWhereLightsAre(false),
-                StaticSpeakerFactory.AudioFilters.IsConditionTrue(isBlackoutActive)
-            });
-            speaker.Play(audioSamples, loop: false);
-            speaker.SetVolume(0.8f);
-            speaker.SetSpatialization(true);
-            speaker.SetMaxDistance(20f);
-            Logger.Info($"[BlackoutAudioPlugin] Playing blackout sound for SCPs at position {position}.");
+                if (speaker is ISpeakerWithPlayerFilter filterSpeaker)
+                {
+                    filterSpeaker.SetValidPlayers(p =>
+                        p.Team == Team.SCP &&
+                        p.IsAlive &&
+                        p.CurrentRoom != null &&
+                        !p.CurrentRoom.LightsEnabled &&
+                        isBlackoutActive
+                    );
+                }
+            },
+            queue: false,
+            fadeInDuration: 1f,
+            persistent: true,
+            lifespan: 10f,
+            autoCleanup: true
+        );
+
+        if (controllerId != 0)
+        {
+            Logger.Info($"[BlackoutAudioPlugin] Playing blackout sound for SCPs with controller ID {controllerId}.");
         }
         else
         {
-            Logger.Warn($"[BlackoutAudioPlugin] Failed to get or create speaker for controller ID {controllerId}.");
+            Logger.Warn("[BlackoutAudioPlugin] Failed to play blackout sound.");
         }
-    }
-
-    public void OnRoundEnded()
-    {
-        StaticSpeakerFactory.ClearSpeakers();
-        Logger.Info("[BlackoutAudioPlugin] Cleared all speakers for round restart.");
     }
 }
 ```
@@ -537,10 +573,11 @@ public void ManageSpeakers()
 | `AudioFilters`           | `AudioManagerAPI.Features.Filters`    | Provides predefined filters for controlling which players hear audio based on role, team, position, room, or custom conditions. |
 | `SpeakerState`           | `AudioManagerAPI.Speakers.State`      | Stores persistent speaker state for recovery (position, volume, queued clips). |
 
-### Important Methods
+### Key Methods
 
-- `IAudioManager.PlayAudio`: Plays audio at a specific position with configurable parameters.
-- `IAudioManager.PlayGlobalAudio`: Plays audio for all players.
+- `IAudioManager.PlayAudio`: Plays spatial audio at a specific position with configurable parameters.
+- `IAudioManager.PlayGlobalAudio`: Plays non-spatial audio for all players.
+- `IAudioManager.PlayGlobalAudioWithFilter`: Plays non-spatial audio with custom speaker configuration, such as player filters.
 - `ISpeakerFactory.CreateSpeaker`: Creates a new speaker at a specified position.
 - `ISpeaker.Play`: Plays audio samples with optional looping.
 - `ISpeakerWithPlayerFilter.SetValidPlayers`: Sets a filter to control which players hear the audio.
@@ -555,6 +592,9 @@ public void ManageSpeakers()
 
 ## Notes
 
+- **Global Audio with Filters**: Use `PlayGlobalAudioWithFilter` to play non-spatial audio with custom player filters, ideal for targeted announcements or events.
+- **Spatial vs. Non-Spatial Audio**: `PlayAudio` is for spatial audio with 3D positioning, while `PlayGlobalAudio` and `PlayGlobalAudioWithFilter` are for non-spatial audio heard uniformly by targeted players.
+- **Documentation**: Version 1.6.0 includes comprehensive XML documentation for all public methods, improving clarity and ease of use.
 - **Controller ID Synchronization**: `ControllerIdManager` ensures no ID conflicts by maintaining a shared pool of IDs (1-255). High-priority audio can evict lower-priority speakers or be queued for later allocation.
 - **Speaker Lifecycle Management**: Use `StaticSpeakerFactory` or `DefaultSpeakerFactory` methods (`GetSpeaker`, `RemoveSpeaker`, `ClearSpeakers`) to manage speakers. Call `ClearSpeakers` on round restarts to prevent memory leaks.
 - **Thread Safety**: All operations (ID allocation, caching, speaker management, filters) are thread-safe using locks.
