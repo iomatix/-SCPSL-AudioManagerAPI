@@ -81,7 +81,7 @@ public class AudioPlugin
     public void Initialize()
     {
         DefaultAudioManager.RegisterDefaults(cacheSize: 50);
-        DefaultAudioManager.RegisterAudio("ambientSound", () => Assembly.GetExecutingAssembly().GetManifestResourceStream("MyPlugin.Audio.ambient.wav"));
+        DefaultAudioManager.RegisterAudio("ambientSound", () => Assembly.GetManifestResourceStream("MyPlugin.Audio.ambient.wav"));
     }
 
     public void PlayAudio()
