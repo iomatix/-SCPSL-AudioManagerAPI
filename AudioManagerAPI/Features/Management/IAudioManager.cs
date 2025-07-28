@@ -52,6 +52,9 @@
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="key"/> or <paramref name="streamProvider"/> is null.</exception>
         void RegisterAudio(string key, Func<Stream> streamProvider);
 
+        // TODO
+        AudioOptions Options { get; }
+        
         /// <summary>
         /// Retrieves the speaker associated with the specified controller ID.
         /// </summary>
