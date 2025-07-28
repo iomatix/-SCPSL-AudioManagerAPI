@@ -80,38 +80,19 @@ public class AudioPlugin
 {
     public void Initialize()
     {
-            
-            // If DefaultAudioManager.Instance is null,
-            // it means there's no existing AudioManager registered.
-            // So, we register the default configuration first with a cache size of 50,
-            // ensuring compatibility when multiple plugins try to initialize audio independently.
-            // RegisterDefaults would override any previous settings, so we only call it once.
-            // Then we register our custom ambient sound stream.
-            // If DefaultAudioManager.Instance is NOT null,
-            // it means another plugin may have already initialized it.
-            // To maintain compatibility, we only register our ambient sound without reinitializing the entire manager.
-            if (DefaultAudioManager.Instance == null)
-            {
-                DefaultAudioManager.RegisterDefaults(cacheSize: 50);
+        // From version 1.7.0 onward, DefaultAudioManager.Instance is initialized automatically
+        // using configuration settings from AudioConfig.json. Manual calls to RegisterDefaults
+        // are no longer needed, and Instance is guaranteed to be available at any time.
 
-                // Loads an embedded WAV file from the plugin assembly as a resource stream.
-                // To make this work, ensure:
-                // - The audio file ("ambient.wav") is placed in a folder like "Audio" inside your project.
-                // - Right-click the file in your IDE and set its Build Action to "Embedded Resource" (not "Copy to Output Directory").
-                // - The WAV file **must** be:
-                //     • 16-bit PCM
-                //     • Mono (1 channel)
-                //     • 48 kHz sample rate
-                // These settings are required by SCP:SL’s audio engine for compatibility and correct playback.
-                // The resource name should match exactly: "MyPlugin.Audio.ambient.wav"
-                // (Format: [DefaultNamespace].[Folder].[Filename])
-                DefaultAudioManager.RegisterAudio("ambientSound", () => Assembly.GetManifestResourceStream("MyPlugin.Audio.ambient.wav"));
-            }
-            else
-            {
-                DefaultAudioManager.RegisterAudio("ambientSound", () => Assembly.GetManifestResourceStream("MyPlugin.Audio.ambient.wav"));
-            }
-        
+        // Register your audio stream normally:
+        DefaultAudioManager.RegisterAudio("ambientSound", () => Assembly.GetManifestResourceStream("MyPlugin.Audio.ambient.wav"));
+
+        // Make sure your WAV file meets the SCP:SL requirements:
+        // • 16-bit PCM
+        // • Mono (1 channel)
+        // • 48 kHz sample rate
+        // Resource name format: "MyPlugin.Audio.ambient.wav"
+    }   
         
     }
 
