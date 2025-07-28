@@ -807,7 +807,7 @@ If upgrading from version 1.6.0 or earlier:
 
 ## Contributing
 
-Contributions are welcome! Please submit pull requests or issues to the [GitHub repository](https://github.com/ioMatix/-SCPSL-AudioManagerAPI). Ensure code follows SCP:SL plugin conventions, uses `System.Text.Json` for configuration, and includes tests for new features.
+Contributions are welcome! Please submit pull requests or issues to the [GitHub repository](https://github.com/ioMatix/-SCPSL-AudioManagerAPI). Ensure code follows SCP:SL plugin conventions, uses `System.Text.Json` for configuration-related changes (built into .NET), and includes tests for new features.
 
 ## License
 
