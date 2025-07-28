@@ -35,20 +35,48 @@
         public event Action<byte, int> OnSkipped;
         public event Action<byte> OnQueueEmpty;
 
+        public AudioOptions Options { get; }
+    
         /// <summary>
         /// Initializes a new instance of the <see cref="AudioManager"/> class.
+        /// Loads settings from AudioConfig.json (via <see cref="AudioConfigLoader"/>),
+        /// applies the configured cache size and speaker factory choice,
+        /// and initializes the audio cache and options accordingly.
         /// </summary>
-        /// <param name="speakerFactory">The factory used to create speaker instances.</param>
-        /// <param name="cacheSize">The maximum number of audio samples to cache.</param>
-        /// <exception cref="ArgumentNullException">Thrown when <paramref name="speakerFactory"/> is null.</exception>
-        /// <exception cref="ArgumentException">Thrown when <paramref name="cacheSize"/> is not positive.</exception>
-        public AudioManager(ISpeakerFactory speakerFactory, int cacheSize = 50)
+        /// <param name="speakerFactory">
+        /// The factory used to create speaker instances; must not be null.
+        /// </param>
+        /// <exception cref="ArgumentNullException">
+        /// Thrown when <paramref name="speakerFactory"/> is null.
+        /// </exception>
+        /// <exception cref="ArgumentException">
+        /// Thrown when the cache size loaded from configuration is not positive.
+        /// </exception>
+        public AudioManager(ISpeakerFactory speakerFactory)
         {
-            this.speakerFactory = speakerFactory ?? throw new ArgumentNullException(nameof(speakerFactory));
-            if (cacheSize <= 0)
-                throw new ArgumentException("Cache size must be positive.", nameof(cacheSize));
-            this.audioCache = new AudioCache(cacheSize);
+            this.speakerFactory = speakerFactory
+                ?? throw new ArgumentNullException(nameof(speakerFactory));
+        
+            var config = AudioConfigLoader.LoadOrCreate();
+        
+            if (config.CacheSize <= 0)
+                throw new ArgumentException(
+                    "Cache size must be positive (loaded from AudioConfig.json).",
+                    nameof(config.CacheSize)
+                );
+        
+            this.audioCache = new AudioCache(config.CacheSize);
+        
+            Options = new AudioOptions
+            {
+                CacheSize = config.CacheSize,
+                UseDefaultSpeakerFactory = config.UseDefaultSpeakerFactory,
+                DefaultFadeInDuration = config.DefaultFadeInDuration,
+                DefaultFadeOutDuration = config.DefaultFadeOutDuration,
+                PluginSettings = config.PluginSettings
+            };
         }
+
 
         public void RegisterAudio(string key, Func<Stream> streamProvider)
         {
