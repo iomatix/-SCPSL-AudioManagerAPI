@@ -1,9 +1,12 @@
 ﻿namespace AudioManagerAPI.Defaults
 {
-    using System;
-    using System.IO;
+    using AudioManagerAPI.Config;
     using AudioManagerAPI.Features.Enums;
     using AudioManagerAPI.Features.Management;
+    using AudioManagerAPI.Features.Speakers;
+    using AudioManagerAPI.Features.Static;
+    using System;
+    using System.IO;
 
     /// <summary>
     /// Static entry point for a ready-to-use AudioManager configured with
@@ -26,24 +29,27 @@
     /// </summary>
     public static class DefaultAudioManager
     {
-        
-        /// <summary>
-        /// Singleton AudioManager instance initialized automatically on first access
-        /// using configuration settings from AudioConfig.json.
-        /// </summary>
-        public static IAudioManager Instance { get; }
+
 
         public static AudioOptions Options => (Instance as AudioManager)?.Options ?? throw new InvalidOperationException("DefaultAudioManager.Instance is not AudioManager.");
-        
-        static DefaultAudioManager()
+
+
+        /// <summary>
+        /// Singleton AudioManager instance initialized lazily on first access
+        /// using configuration settings from AudioConfig.json.
+        /// </summary>
+        public static IAudioManager Instance => _lazyInstance.Value;
+        private static readonly Lazy<IAudioManager> _lazyInstance = new Lazy<IAudioManager>(() =>
         {
             var config = AudioConfigLoader.LoadOrCreate();
             ISpeakerFactory factory = config.UseDefaultSpeakerFactory
                 ? new DefaultSpeakerFactory()
                 : StaticSpeakerFactory.Instance;
-        
-            Instance = new AudioManager(factory);
-        }
+
+            return new AudioManager(factory);
+        }, isThreadSafe: true);
+
+
 
         /// <summary>
         /// Registers an audio stream provider for a given key.

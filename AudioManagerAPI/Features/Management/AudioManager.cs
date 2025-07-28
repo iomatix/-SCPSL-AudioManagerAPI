@@ -1,6 +1,7 @@
 ﻿namespace AudioManagerAPI.Features.Management
 {
     using AudioManagerAPI.Cache;
+    using AudioManagerAPI.Config;
     using AudioManagerAPI.Controllers;
     using AudioManagerAPI.Defaults;
     using AudioManagerAPI.Features.Enums;
@@ -13,6 +14,7 @@
     using System.Collections.Generic;
     using System.IO;
     using System.Linq;
+    using System.Reflection;
     using UnityEngine;
 
     using Log = LabApi.Features.Console.Logger;
@@ -26,7 +28,6 @@
         private readonly AudioCache audioCache;
         private readonly ISpeakerFactory speakerFactory;
         private readonly object lockObject = new object();
-        private const float DEFAULT_FADE_DURATION = 1f;
 
         public event Action<byte> OnPlaybackStarted;
         public event Action<byte> OnPaused;
@@ -35,6 +36,12 @@
         public event Action<byte, int> OnSkipped;
         public event Action<byte> OnQueueEmpty;
 
+        /// <summary>
+        /// Gets the currently active audio options used by the <see cref="AudioManager"/> singleton instance.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">
+        /// Thrown if the <see cref="Instance"/> is not of type <see cref="AudioManager"/>.
+        /// </exception>
         public AudioOptions Options { get; }
     
         /// <summary>
@@ -54,6 +61,7 @@
         /// </exception>
         public AudioManager(ISpeakerFactory speakerFactory)
         {
+
             this.speakerFactory = speakerFactory
                 ?? throw new ArgumentNullException(nameof(speakerFactory));
         
@@ -73,7 +81,6 @@
                 UseDefaultSpeakerFactory = config.UseDefaultSpeakerFactory,
                 DefaultFadeInDuration = config.DefaultFadeInDuration,
                 DefaultFadeOutDuration = config.DefaultFadeOutDuration,
-                PluginSettings = config.PluginSettings
             };
         }
 
@@ -181,10 +188,10 @@
 
                         if (autoCleanup || lifespan.HasValue)
                         {
-                            speaker.StartAutoStop(id, lifespan ?? float.MaxValue, autoCleanup, newId => FadeOutAudio(id, DEFAULT_FADE_DURATION));
+                            speaker.StartAutoStop(id, lifespan ?? float.MaxValue, autoCleanup, newId => FadeOutAudio(id, this.Options.DefaultFadeOutDuration));
                         }
 
-                        ControllerIdManager.UpdateStopCallback(id, () => FadeOutAudio(id, DEFAULT_FADE_DURATION));
+                        ControllerIdManager.UpdateStopCallback(id, () => FadeOutAudio(id, this.Options.DefaultFadeOutDuration));
                         Log.Debug($"[AudioManagerAPI] Played audio {key} with ID {id} at {Timing.LocalTime}.");
                     },
                     () => Log.Warn($"[AudioManagerAPI] Failed to allocate ID for audio {key}."));
@@ -321,7 +328,7 @@
                     id =>
                     {
                         newId = id;
-                        ControllerIdManager.UpdateStopCallback(id, () => FadeOutAudio(id, DEFAULT_FADE_DURATION));
+                        ControllerIdManager.UpdateStopCallback(id, () => FadeOutAudio(id, this.Options.DefaultFadeOutDuration));
                     },
                     () => Log.Warn($"[AudioManagerAPI] Failed to allocate new ID for recovering speaker {controllerId}."));
                 if (newId == 0)
@@ -364,7 +371,7 @@
 
                 if (state.AutoCleanup || state.Lifespan.HasValue)
                 {
-                    speaker.StartAutoStop(newId, state.Lifespan ?? float.MaxValue, state.AutoCleanup, id => FadeOutAudio(id, DEFAULT_FADE_DURATION));
+                    speaker.StartAutoStop(newId, state.Lifespan ?? float.MaxValue, state.AutoCleanup, id => FadeOutAudio(id, this.Options.DefaultFadeOutDuration));
                 }
 
                 Log.Debug($"[AudioManagerAPI] Recovered persistent speaker ID {controllerId} as {newId} at {Timing.LocalTime}.");

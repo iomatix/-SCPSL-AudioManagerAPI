@@ -2,6 +2,7 @@
 {
     using AudioManagerAPI.Features.Speakers;
     using LabApi.Features.Wrappers;
+    using System.Collections.Concurrent;
     using System.Collections.Generic;
     using System.Linq;
     using UnityEngine;
@@ -13,7 +14,7 @@
     /// </summary>
     public class DefaultSpeakerFactory : ISpeakerFactory
     {
-        private static readonly Dictionary<byte, ISpeaker> speakerRegistry = new Dictionary<byte, ISpeaker>();
+        private static readonly ConcurrentDictionary<byte, ISpeaker> speakerRegistry = new ConcurrentDictionary<byte, ISpeaker>();
         private static readonly object registryLock = new object();
 
         /// <summary>
@@ -24,18 +25,9 @@
         /// <returns>An <see cref="ISpeaker"/> instance with pause/resume support, or null if creation fails.</returns>
         public ISpeaker CreateSpeaker(Vector3 position, byte controllerId)
         {
-            lock (registryLock)
+            // Try to get existing speaker or create a new one
+            ISpeaker speaker = speakerRegistry.GetOrAdd(controllerId, _ =>
             {
-
-
-                // Check if a speaker already exists for the controllerId
-                if (speakerRegistry.TryGetValue(controllerId, out ISpeaker existingSpeaker))
-                {
-                    Log.Debug($"CreateSpeaker: Speaker for controller ID {controllerId} already exists, returning existing instance.");
-                    return existingSpeaker;
-                }
-
-                // Create a new SpeakerToy
                 SpeakerToy speakerToy = SpeakerToy.Create(position, Quaternion.identity, Vector3.one, null, true);
                 if (speakerToy == null)
                 {
@@ -43,10 +35,7 @@
                     return null;
                 }
 
-                // Set the controllerId
                 speakerToy.ControllerId = controllerId;
-
-                // Verify transmitter exists
                 if (SpeakerToy.GetTransmitter(controllerId) == null)
                 {
                     Log.Warn($"CreateSpeaker: No transmitter found for controller ID {controllerId}.");
@@ -54,12 +43,18 @@
                     return null;
                 }
 
-                // Create and register the DefaultSpeakerToyAdapter
-                ISpeaker speaker = new DefaultSpeakerToyAdapter(speakerToy);
-                speakerRegistry[controllerId] = speaker;
+                ISpeaker newSpeaker = new DefaultSpeakerToyAdapter(speakerToy);
                 Log.Debug($"CreateSpeaker: Created and registered new DefaultSpeakerToyAdapter for controller ID {controllerId} at position {position}.");
-                return speaker;
+                return newSpeaker;
+            });
+
+            if (speaker != null && speaker is DefaultSpeakerToyAdapter adapter)
+            {
+                // Update position if speaker already exists
+                adapter.SetPosition(position);
             }
+
+            return speaker;
         }
 
         /// <summary>
@@ -69,28 +64,23 @@
         /// <returns>The <see cref="ISpeaker"/> instance, or null if not found.</returns>
         public ISpeaker GetSpeaker(byte controllerId)
         {
-            lock (registryLock)
+            if (speakerRegistry.TryGetValue(controllerId, out ISpeaker speaker))
             {
-                // Check registry first
-                if (speakerRegistry.TryGetValue(controllerId, out ISpeaker speaker))
-                {
-                    Log.Debug($"GetSpeaker: Found registered speaker for controller ID {controllerId}.");
-                    return speaker;
-                }
-
-                // Search for an existing SpeakerToy with the matching controllerId
-                SpeakerToy speakerToy = SpeakerToy.List.FirstOrDefault(toy => toy.ControllerId == controllerId);
-                if (speakerToy != null)
-                {
-                    speaker = new DefaultSpeakerToyAdapter(speakerToy);
-                    speakerRegistry[controllerId] = speaker;
-                    Log.Debug($"GetSpeaker: Found existing SpeakerToy and created DefaultSpeakerToyAdapter for controller ID {controllerId}.");
-                    return speaker;
-                }
-
-                Log.Warn($"GetSpeaker: No speaker found for controller ID {controllerId}.");
-                return null;
+                Log.Debug($"GetSpeaker: Found registered speaker for controller ID {controllerId}.");
+                return speaker;
             }
+
+            SpeakerToy speakerToy = SpeakerToy.List.FirstOrDefault(toy => toy.ControllerId == controllerId);
+            if (speakerToy != null)
+            {
+                speaker = new DefaultSpeakerToyAdapter(speakerToy);
+                speakerRegistry.TryAdd(controllerId, speaker);
+                Log.Debug($"GetSpeaker: Found existing SpeakerToy and created DefaultSpeakerToyAdapter for controller ID {controllerId}.");
+                return speaker;
+            }
+
+            Log.Warn($"GetSpeaker: No speaker found for controller ID {controllerId}.");
+            return null;
         }
 
         /// <summary>
@@ -100,20 +90,16 @@
         /// <returns>True if the speaker was removed, false otherwise.</returns>
         public bool RemoveSpeaker(byte controllerId)
         {
-            lock (registryLock)
+            if (speakerRegistry.TryRemove(controllerId, out ISpeaker speaker))
             {
-                if (speakerRegistry.TryGetValue(controllerId, out ISpeaker speaker))
+                if (speaker is DefaultSpeakerToyAdapter adapter)
                 {
-                    if (speaker is DefaultSpeakerToyAdapter adapter)
-                    {
-                        adapter.Destroy();
-                    }
-                    speakerRegistry.Remove(controllerId);
-                    Log.Debug($"RemoveSpeaker: Removed speaker for controller ID {controllerId} from registry.");
-                    return true;
+                    adapter.Destroy();
                 }
-                return false;
+                Log.Debug($"RemoveSpeaker: Removed speaker for controller ID {controllerId} from registry.");
+                return true;
             }
+            return false;
         }
 
         /// <summary>
@@ -121,18 +107,15 @@
         /// </summary>
         public void ClearSpeakers()
         {
-            lock (registryLock)
+            foreach (var kvp in speakerRegistry)
             {
-                foreach (var speaker in speakerRegistry.Values)
+                if (kvp.Value is DefaultSpeakerToyAdapter adapter)
                 {
-                    if (speaker is DefaultSpeakerToyAdapter adapter)
-                    {
-                        adapter.Destroy();
-                    }
+                    adapter.Destroy();
                 }
-                speakerRegistry.Clear();
-                Log.Debug("ClearSpeakers: Cleared all speakers from registry.");
             }
+            speakerRegistry.Clear();
+            Log.Debug("ClearSpeakers: Cleared all speakers from registry.");
         }
     }
 }

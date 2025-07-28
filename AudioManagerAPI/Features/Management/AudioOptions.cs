@@ -1,3 +1,9 @@
+namespace AudioManagerAPI.Features.Management
+{
+    /// <summary>
+    /// Represents runtime audio playback settings used by <see cref="AudioManager"/>.
+    /// Includes cache size, default speaker factory preference, and fade durations.
+    /// </summary>
     public class AudioOptions
     {
         public int CacheSize { get; set; }
@@ -5,5 +11,5 @@
         public float DefaultFadeInDuration { get; set; }
         public float DefaultFadeOutDuration { get; set; }
 
-        public Dictionary<string, int> RequiredCacheSizes { get; set; }
     }
+}
