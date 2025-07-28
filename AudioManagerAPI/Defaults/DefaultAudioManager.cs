@@ -32,15 +32,17 @@
         /// using configuration settings from AudioConfig.json.
         /// </summary>
         public static IAudioManager Instance { get; }
-    
+
+        public static AudioOptions Options => (Instance as AudioManager)?.Options ?? throw new InvalidOperationException("DefaultAudioManager.Instance is not AudioManager.");
+        
         static DefaultAudioManager()
         {
             var config = AudioConfigLoader.LoadOrCreate();
             ISpeakerFactory factory = config.UseDefaultSpeakerFactory
                 ? new DefaultSpeakerFactory()
                 : StaticSpeakerFactory.Instance;
-    
-            Instance = new AudioManager(factory, config.CacheSize);
+        
+            Instance = new AudioManager(factory);
         }
 
         /// <summary>
