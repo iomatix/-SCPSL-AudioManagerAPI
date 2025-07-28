@@ -417,7 +417,7 @@ public class CustomAudioManager
 
 ### 5. Using Audio Filters
 
-The `AudioFilters` class in the `AudioManagerAPI.Features.Filters` namespace provides predefined filters to control which players hear audio from a speaker. These filters are accessible via `StaticSpeakerFactory.AudioFilters` for convenience and can be used with `ISpeakerWithPlayerFilter.SetValidPlayers` to target specific players based on role, team, position, room, or custom conditions. Filters can be combined to create complex audio playback scenarios, such as playing audio only to certain roles in specific rooms during events like blackouts.
+The `AudioFilters` class in the `AudioManagerAPI.Features.Filters` namespace provides predefined filters to control which players hear audio from a speaker. These filters are accessible via `AudioManagerAPI.Features.Filters.AudioFilters` for convenience and can be used with `ISpeakerWithPlayerFilter.SetValidPlayers` to target specific players based on role, team, position, room, or custom conditions. Filters can be combined to create complex audio playback scenarios, such as playing audio only to certain roles in specific rooms during events like blackouts.
 
 #### Available Filters
 - `ByRole(RoleTypeId roleType)`: Filters players by their role (e.g., `RoleTypeId.Scp173`).
@@ -527,8 +527,8 @@ public class IntercomAudioPlugin
                     {
                         filterSpeaker.SetValidPlayers(new[]
                         {
-                            StaticSpeakerFactory.AudioFilters.IsInRoom(RoomName.EzIntercom),
-                            StaticSpeakerFactory.AudioFilters.IsAlive()
+                            AudioManagerAPI.Features.Filters.AudioFilters.IsInRoom(RoomName.EzIntercom),
+                            AudioManagerAPI.Features.Filters.AudioFilters.IsAlive()
                         });
                     }
                 },
@@ -592,8 +592,8 @@ public class ProximityAudioPlugin
                     {
                         filterSpeaker.SetValidPlayers(new[]
                         {
-                            StaticSpeakerFactory.AudioFilters.ByRole(RoleTypeId.Scientist),
-                            StaticSpeakerFactory.AudioFilters.ByDistance(position, 10f)
+                            AudioManagerAPI.Features.Filters.AudioFilters.ByRole(RoleTypeId.Scientist),
+                            AudioManagerAPI.Features.Filters.AudioFilters.ByDistance(position, 10f)
                         });
                     }
                 },
@@ -779,7 +779,7 @@ public class AudioEventPlugin
 - `ISpeaker.Play`: Plays audio samples with optional looping (for advanced use cases).
 - `ISpeakerWithPlayerFilter.SetValidPlayers`: Sets a filter to control which players hear the audio.
 - `StaticSpeakerFactory.ClearSpeakers`: Clears all registered speakers.
-- `StaticSpeakerFactory.AudioFilters.*`: Provides predefined filters for role, team, distance, room, and custom conditions.
+- `AudioManagerAPI.Features.Filters.AudioFilters.*`: Provides predefined filters for role, team, distance, room, and custom conditions.
 
 ## Notes
 
@@ -795,7 +795,7 @@ public class AudioEventPlugin
 - **Fading and Queuing**: Use `FadeInAudio`/`FadeOutAudio` for smooth transitions, `ClearSpeakerQueue` to reset queues, and `GetQueueStatus` to monitor queue state.
 - **Persistent Speakers**: Use `persistent: true` to retain speaker state (position, volume, queued clips, playback position) for recovery via `RecoverSpeaker`, validated by `ValidateState`.
 - **Playback Position**: For persistent speakers, playback position is approximated by trimming samples, as `AudioTransmitter` does not natively support seeking.
-- **Player Filters**: Use `StaticSpeakerFactory.AudioFilters` or custom `Func<Player, bool>` with `ISpeakerWithPlayerFilter.SetValidPlayers` to control which players hear audio.
+- **Player Filters**: Use `AudioManagerAPI.Features.Filters.AudioFilters` or custom `Func<Player, bool>` with `ISpeakerWithPlayerFilter.SetValidPlayers` to control which players hear audio.
 
 ## Migration Guide for Version 1.7.0
 
