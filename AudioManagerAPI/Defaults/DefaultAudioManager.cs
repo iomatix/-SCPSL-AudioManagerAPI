@@ -6,15 +6,14 @@
     using AudioManagerAPI.Features.Management;
 
     /// <summary>
-    /// Static entry point for a ready-to-use AudioManager wired up with
-    /// the default LabAPI-based speaker implementation. Call RegisterDefaults()
-    /// once at startup, then use the convenience methods for play/pause/resume/stop.
+    /// Static entry point for a ready-to-use AudioManager configured with
+    /// the default LabAPI-based speaker implementation and customizable settings
+    /// loaded from an external configuration file on first access.
     /// <example>
-    /// // Plugin startup
-    /// DefaultAudioManager.RegisterDefaults();
+    /// // Plugin code
+    /// DefaultAudioManager.RegisterAudio("explosionSound", () => Assembly.GetExecutingAssembly()
+    ///     .GetManifestResourceStream("MyPlugin.Audio.explosion.wav"));
     ///
-    /// // Anywhere in plugin code
-    /// DefaultAudioManager.RegisterAudio("explosionSound", () => Assembly.GetExecutingAssembly().GetManifestResourceStream("MyPlugin.Audio.explosion.wav"));
     /// byte id = DefaultAudioManager.Play("explosionSound", queue: true, fadeInDuration: 2f);
     /// DefaultAudioManager.Pause(id);
     /// DefaultAudioManager.Resume(id);
@@ -22,28 +21,26 @@
     /// DefaultAudioManager.FadeOut(id, 2f);
     /// DefaultAudioManager.Stop(id);
     /// </example>
+    /// The configuration file (e.g. AudioConfig.json) is auto-created on first launch
+    /// with default settings such as speaker factory type and cache size.
     /// </summary>
     public static class DefaultAudioManager
     {
+        
         /// <summary>
-        /// The singleton instance of <see cref="IAudioManager"/>
-        /// configured with <see cref="DefaultSpeakerFactory"/>.
+        /// Singleton AudioManager instance initialized automatically on first access
+        /// using configuration settings from AudioConfig.json.
         /// </summary>
-        public static IAudioManager Instance { get; private set; }
-
-        /// <summary>
-        /// Initializes the default AudioManager using
-        /// <see cref="DefaultSpeakerFactory"/> and an <see cref="AudioCache"/>.
-        /// Must be called before invoking any other methods on this class.
-        /// </summary>
-        /// <param name="cacheSize">
-        /// Maximum number of loaded audio samples to keep in memory.
-        /// Defaults to 50.
-        /// </param>
-        public static void RegisterDefaults(int cacheSize = 50)
+        public static IAudioManager Instance { get; }
+    
+        static DefaultAudioManager()
         {
-            var factory = new DefaultSpeakerFactory();
-            Instance = new AudioManager(factory, cacheSize);
+            var config = AudioConfigLoader.LoadOrCreate();
+            ISpeakerFactory factory = config.UseDefaultSpeakerFactory
+                ? new DefaultSpeakerFactory()
+                : StaticSpeakerFactory.Instance;
+    
+            Instance = new AudioManager(factory, config.CacheSize);
         }
 
         /// <summary>
