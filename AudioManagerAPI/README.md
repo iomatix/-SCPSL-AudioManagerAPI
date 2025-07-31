@@ -10,6 +10,10 @@ A lightweight, reusable C# library for managing audio playback in SCP: Secret La
 > ⚠️ **Warning**  
 > Version 1.7.0 introduces breaking changes. `DefaultAudioManager` is now initialized automatically via `AudioConfig.json` using `System.Text.Json`. Manual initialization (e.g., `RegisterDefaults`) is no longer supported. Update your plugins to use `DefaultAudioManager.Instance` directly.
 
+## Powered by AudioManagerAPI
+- [SCP-575 NPC](https://github.com/iomatix/-SCPSL-SCP-575-NPC)
+- [Omega-Warhead](https://github.com/iomatix/-SCPSL-OmegaWarhead)
+
 ## What's New in Version 1.7.0
 
 - **Automatic Initialization**: `DefaultAudioManager.Instance` is lazily initialized on first access using settings from `Configs/AudioConfig.json`, eliminating manual setup.
