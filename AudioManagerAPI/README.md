@@ -44,7 +44,7 @@ A lightweight, reusable C# library for managing audio playback in SCP: Secret La
 Install the `SCPSL-AudioManagerAPI` package via NuGet:
 
 ```bash
-dotnet add package SCPSL-AudioManagerAPI --version 1.7.0
+dotnet add package SCPSL-AudioManagerAPI --version 1.8.0
 ```
 
 Ensure you have the following dependencies in your SCP:SL plugin project:
@@ -64,7 +64,7 @@ Example `.csproj` snippet:
     <TargetFramework>net48</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="SCPSL-AudioManagerAPI" Version="1.7.0" />
+    <PackageReference Include="SCPSL-AudioManagerAPI" Version="1.8.0" />
     <Reference Include="LabApi">
       <HintPath>path\to\LabApi.dll</HintPath>
     </Reference>
@@ -104,7 +104,7 @@ Ensure the `Configs` directory is writable to allow automatic creation of `Audio
 
 ### 1. Using DefaultAudioManager (Recommended)
 
-The `DefaultAudioManager` provides a plug-and-play interface for common audio tasks, ideal for most SCP:SL plugins. In version 1.7.0, `DefaultAudioManager.Instance` is initialized automatically, so no manual setup is required.
+The `DefaultAudioManager` provides a plug-and-play interface for common audio tasks, ideal for most SCP:SL plugins. In version 1.7+, `DefaultAudioManager.Instance` is initialized automatically, so no manual setup is required.
 
 ```csharp
 using AudioManagerAPI.Defaults;
