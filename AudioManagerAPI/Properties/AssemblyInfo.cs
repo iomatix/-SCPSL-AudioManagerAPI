@@ -11,7 +11,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("ioMatix")]
 [assembly: AssemblyProduct("SCPSL-AudioManagerAPI")]
-[assembly: AssemblyCopyright("Made by ioMatix ©  2025")]
+[assembly: AssemblyCopyright("Made by ioMatix ©  2026")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
@@ -30,6 +30,6 @@ using System.Runtime.InteropServices;
 //      Build Number
 //      Revision
 //
-[assembly: AssemblyVersion("1.8.0")]
-[assembly: AssemblyFileVersion("1.8.0")]
+[assembly: AssemblyVersion("1.9.0")]
+[assembly: AssemblyFileVersion("1.9.0")]
 [assembly: NeutralResourcesLanguage("en")]
