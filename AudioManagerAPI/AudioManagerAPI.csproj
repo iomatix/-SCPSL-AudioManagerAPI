@@ -24,7 +24,7 @@
 		<PackageProjectUrl>https://github.com/iomatix/-SCPSL-AudioManagerAPI</PackageProjectUrl>
 		<RepositoryUrl>https://github.com/iomatix/-SCPSL-AudioManagerAPI.git</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
-		<Copyright>© 2025 ioMatix. Licensed under LGPL-3.0-only.</Copyright>
+		<Copyright>© 2026 ioMatix. Licensed under LGPL-3.0-only.</Copyright>
 		<PackageTags>audio scpsl scp-sl labapi unity speaker scp secret laboratory scp-exiled scpsl-exiled exiled scp-api scpsl-api exiled-api api manager controller management features admin toy speaker</PackageTags>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<PackageLicenseFile>LICENSE</PackageLicenseFile>
