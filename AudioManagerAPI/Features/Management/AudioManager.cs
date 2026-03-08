@@ -164,20 +164,20 @@
             }
 
             int sessionId = PlayAudio(
-                key,
-                Vector3.zero,
-                loop,
-                volume,
-                0f,
-                999.99f,
-                false,
-                priority,
-                validPlayersFilter,
-                queue,
-                fadeInDuration,
-                persistent,
-                lifespan,
-                autoCleanup);
+                key: key,
+                position: Vector3.zero,
+                loop: loop,
+                volume: volume,
+                minDistance: 0f,
+                maxDistance: 999.99f,
+                isSpatial: false,
+                priority: priority,
+                validPlayersFilter: validPlayersFilter,
+                queue: queue,
+                fadeInDuration: fadeInDuration,
+                persistent: persistent,
+                lifespan: lifespan,
+                autoCleanup: autoCleanup);
 
             if (sessionId != 0 && fadeInDuration > 0)
             {
