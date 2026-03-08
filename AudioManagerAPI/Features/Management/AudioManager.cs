@@ -79,7 +79,21 @@
             return ControllerIdManager.GetSessionState(sessionId);
         }
 
-        public int PlayAudio(string key, Vector3 position, bool loop, float volume, float minDistance, float maxDistance, bool isSpatial, AudioPriority priority, Func<Player, bool> validPlayersFilter = null, bool queue = false, bool persistent = false, float? lifespan = null, bool autoCleanup = false)
+        public int PlayAudio(
+            string key,
+            Vector3 position,
+            bool loop = false,
+            float volume = 1f,
+            float minDistance = 1f,
+            float maxDistance = 20f,
+            bool isSpatial = true,
+            AudioPriority priority = AudioPriority.Medium,
+            Func<Player, bool> validPlayersFilter = null,
+            bool queue = false,
+            float fadeInDuration = 0f,
+            bool persistent = false,
+            float? lifespan = null,
+            bool autoCleanup = false)
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
 
@@ -132,7 +146,17 @@
             }
         }
 
-        public int PlayGlobalAudio(string key, bool loop, float volume, AudioPriority priority, Func<Player, bool> validPlayersFilter = null, bool queue = false, float fadeInDuration = 0f, bool persistent = false, float? lifespan = null, bool autoCleanup = false)
+        public int PlayGlobalAudio(
+            string key,
+            bool loop = false,
+            float volume = 1f,
+            AudioPriority priority = AudioPriority.Medium,
+            Func<Player, bool> validPlayersFilter = null,
+            bool queue = false,
+            float fadeInDuration = 0f,
+            bool persistent = false,
+            float? lifespan = null,
+            bool autoCleanup = false)
         {
             if (validPlayersFilter == null)
             {
@@ -424,11 +448,10 @@
                 }
                 speakers.Clear();
 
-                // ControllerIdManager must clear all active states and queues
-                // Since there is no CleanupAllSessions in ControllerIdManager yet, we iterate or assume a direct wipe
-                // Ensure ControllerIdManager implements a method to clear the internal state cache
-                // Assuming `ControllerIdManager.CleanupEvictedSpeakers()` is adapted or a new method is used.
-                // For completeness, we iterate known active physical instances first.
+                // Full cleanup of the ID pool and saved states in the management layer
+                ControllerIdManager.FullReset();
+
+                Log.Info("[AudioManagerAPI] All audio sessions and physical controllers have been cleaned up.");
             }
         }
     }

@@ -72,14 +72,15 @@
         int PlayAudio(
             string key,
             Vector3 position,
-            bool loop,
-            float volume,
-            float minDistance,
-            float maxDistance,
-            bool isSpatial,
-            AudioPriority priority,
+            bool loop = false,
+            float volume = 1f,
+            float minDistance = 1f,
+            float maxDistance = 20f,
+            bool isSpatial = true,
+            AudioPriority priority = AudioPriority.Medium,
             Func<Player, bool> validPlayersFilter = null,
             bool queue = false,
+            float fadeInDuration = 0f,
             bool persistent = false,
             float? lifespan = null,
             bool autoCleanup = false);
@@ -89,15 +90,15 @@
         /// </summary>
         /// <returns>The session ID, or 0 if initialization fails.</returns>
         int PlayGlobalAudio(
-            string key,
-            bool loop,
-            float volume,
-            AudioPriority priority,
-            Func<Player, bool> validPlayersFilter = null,
-            bool queue = false,
-            float fadeInDuration = 0f,
-            bool persistent = false,
-            float? lifespan = null,
+            string key, 
+            bool loop = false, 
+            float volume = 1f, 
+            AudioPriority priority = AudioPriority.Medium, 
+            Func<Player, bool> validPlayersFilter = null, 
+            bool queue = false, 
+            float fadeInDuration = 0f, 
+            bool persistent = false, 
+            float? lifespan = null, 
             bool autoCleanup = false);
 
         /// <summary>

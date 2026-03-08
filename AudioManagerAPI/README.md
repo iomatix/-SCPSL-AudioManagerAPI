@@ -3,7 +3,7 @@
 [![NuGet Version](https://img.shields.io/nuget/v/SCPSL-AudioManagerAPI.svg)](https://www.nuget.org/packages/SCPSL-AudioManagerAPI/)  
 A lightweight, high-performance, and robust C# library for managing audio playback in SCP: Secret Laboratory (SCP:SL) plugins using LabAPI. 
 
-Designed to integrate seamlessly with Northwood’s LabAPI ecosystem, **AudioManagerAPI V2.0.0** introduces a powerful **Session-Based Architecture**. It abstracts away hardware limitations, providing a reliable system for loading, caching, and playing audio with advanced control (volume, position, range, spatialization, zero-allocation player filtering, and hardware eviction recovery).
+Designed to integrate seamlessly with Northwood’s LabAPI ecosystem, **AudioManagerAPI** introduces a powerful **Session-Based Architecture**. It abstracts away hardware limitations, providing a reliable system for loading, caching, and playing audio with advanced control (volume, position, range, spatialization, zero-allocation player filtering, and hardware eviction recovery).
 
 > ⚠️ **Important: V2.0.0 Breaking Changes** > Version 2.0.0 is a major architectural overhaul. Hardware Controller IDs (`byte`) have been completely replaced by abstract Session IDs (`int`). Direct manipulation of `ISpeaker` is no longer permitted in the public API to ensure thread safety and state persistence during hardware eviction. See the Migration Guide below.
 

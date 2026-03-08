@@ -238,5 +238,29 @@
                 }
             }
         }
+
+        /// <summary>
+        /// Completely resets the controller manager state. 
+        /// Must be called during round restarts to prevent ID exhaustion and memory leaks.
+        /// </summary>
+        public static void FullReset()
+        {
+            lock (lockObject)
+            {
+                activeControllers.Clear();
+                activeSessions.Clear();
+                availableIds.Clear();
+
+                // Re-initialize physical slots (254 to 1) to match the static constructor
+                for (byte i = 254; i >= 1; i--)
+                {
+                    availableIds.Push(i);
+                }
+
+                nextSessionId = 1;
+
+                Log.Debug("[AudioManagerAPI] ControllerIdManager state has been fully reset.");
+            }
+        }
     }
 }
