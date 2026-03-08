@@ -163,7 +163,21 @@
                 validPlayersFilter = p => Player.ReadyList.Contains(p);
             }
 
-            int sessionId = PlayAudio(key, Vector3.zero, loop, volume, 0f, 999.99f, false, priority, validPlayersFilter, queue, persistent, lifespan, autoCleanup);
+            int sessionId = PlayAudio(
+                key,
+                Vector3.zero,
+                loop,
+                volume,
+                0f,
+                999.99f,
+                false,
+                priority,
+                validPlayersFilter,
+                queue,
+                fadeInDuration,
+                persistent,
+                lifespan,
+                autoCleanup);
 
             if (sessionId != 0 && fadeInDuration > 0)
             {
