@@ -28,9 +28,17 @@
             {
                 if (existingSpeaker is DefaultSpeakerToyAdapter adapter)
                 {
-                    adapter.SetPosition(position);
+                    if (adapter.IsValid)
+                    {
+                        adapter.SetPosition(position);
+                        return existingSpeaker;
+                    }
+                    else
+                    {
+                        speakerRegistry.TryRemove(controllerId, out _);
+                        Log.Debug($"[DefaultSpeakerFactory] Stale speaker detected for ID {controllerId}. Re-creating.");
+                    }
                 }
-                return existingSpeaker;
             }
 
             SpeakerToy speakerToy = SpeakerToy.Create(position, Quaternion.identity, Vector3.one, null, true);

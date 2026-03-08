@@ -27,6 +27,11 @@
         public event Action QueueEmpty;
 
         /// <summary>
+        /// Gets a value indicating whether the underlying LabAPI SpeakerToy instance is valid and operational.
+        /// </summary>
+        public bool IsValid => speakerToy?.Base != null;
+
+        /// <summary>
         /// Gets a value indicating whether the speaker's audio queue is currently empty.
         /// Safely evaluates to true if the underlying transmitter does not exist.
         /// </summary>
