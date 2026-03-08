@@ -2,7 +2,6 @@
 {
     using System;
     using System.Collections.Generic;
-    using System.Linq;
     using MEC;
     using AudioManagerAPI.Features.Enums;
     using AudioManagerAPI.Speakers.State;
@@ -10,166 +9,233 @@
     using Log = DebugLogger;
 
     /// <summary>
-    /// Manages audio controller IDs with priority‐based allocation and eviction,
-    /// plus optional persistence of speaker state across evictions.
+    /// Manages physical audio controller IDs (1-254) with priority-based allocation.
+    /// Manages abstract session states independently of physical IDs.
     /// </summary>
     public static class ControllerIdManager
     {
-        private static readonly byte[] availableIds = new byte[255];
-        private static readonly Dictionary<byte, (AudioPriority priority, Action stopCallback, bool persistent)> controllerPriorities = new Dictionary<byte, (AudioPriority priority, Action stopCallback, bool persistent)>();
-        private static readonly Dictionary<byte, SpeakerState> persistentSpeakerStates = new Dictionary<byte, SpeakerState>();
+        // Object for thread safety
         private static readonly object lockObject = new object();
 
+        // Physical controller IDs available for immediate use
+        private static readonly Stack<byte> availableIds = new Stack<byte>(254);
+
+        // Maps physical controller ID to the currently active Session ID
+        private static readonly Dictionary<byte, int> activeControllers = new Dictionary<byte, int>(254);
+
+        // Abstract Session data
+        private static readonly Dictionary<int, SessionData> activeSessions = new Dictionary<int, SessionData>();
+
+        // Auto-incrementing session ID
+        private static int nextSessionId = 1;
+
+        // Internal struct to hold all data related to an audio session
+        private struct SessionData
+        {
+            public AudioPriority Priority;
+            public Action StopCallback;
+            public SpeakerState State;
+            public byte? CurrentControllerId; // Null if evicted or waiting
+        }
 
         static ControllerIdManager()
         {
-            // IDs 1…254 are valid controller slots
-            for (byte i = 1; i <= 254; i++)
-                availableIds[i - 1] = i;
-        }
-
-        /// <summary>
-        /// Allocates a free controller ID for playback, evicting a lower‐priority speaker if necessary.
-        /// Optionally persists a state object for later retrieval if the speaker is evicted.
-        /// </summary>
-        /// <param name="priority">
-        /// The relative importance of this audio (Low, Medium, High). Higher‐priority
-        /// requests may evict lower‐priority speakers when IDs run out.
-        /// </param>
-        /// <param name="stopCallback">
-        /// The action to invoke when this speaker is stopped or evicted to free up its ID.
-        /// </param>
-        /// <param name="persistent">
-        /// Whether to remember the provided <paramref name="state"/> if this speaker is evicted.
-        /// </param>
-        /// <param name="state">
-        /// An arbitrary object representing speaker‐specific state (e.g., position, settings).
-        /// If <paramref name="persistent"/> is true, this will be stored and can be later
-        /// retrieved via <see cref="GetSpeakerState(byte)"/>.
-        /// </param>
-        /// <param name="onSuccess">
-        /// Callback invoked with the newly allocated controller ID upon success.
-        /// </param>
-        /// <param name="onFailure">
-        /// Callback invoked if no suitable ID could be allocated or evicted.
-        /// </param>
-        /// <returns>
-        /// The allocated controller ID (1–254), or 0 if allocation failed.
-        /// </returns>
-        public static byte AllocateId(AudioPriority priority, Action stopCallback, bool persistent, SpeakerState state, Action<byte> onSuccess, Action onFailure)
-        {
-            lock (lockObject)
+            // Initialize physical slots (1 to 254)
+            // Push in reverse order so ID 1 is popped first (optional, but cleaner)
+            for (byte i = 254; i >= 1; i--)
             {
-                byte controllerId = availableIds.FirstOrDefault(id => !controllerPriorities.ContainsKey(id));
-                if (controllerId == 0)
-                {
-                    var evictable = controllerPriorities
-                        .Where(p => !p.Value.persistent || p.Value.priority < priority)
-                        .OrderBy(p => p.Value.priority)
-                        .FirstOrDefault();
-                    if (evictable.Key == 0)
-                    {
-                        onFailure?.Invoke();
-                        return 0;
-                    }
-
-                    if (evictable.Value.persistent)
-                    {
-                        persistentSpeakerStates[evictable.Key] = state;
-                    }
-                    evictable.Value.stopCallback?.Invoke();
-                    controllerPriorities.Remove(evictable.Key);
-                    controllerId = evictable.Key;
-                }
-
-                controllerPriorities[controllerId] = (priority, stopCallback, persistent);
-                if (persistent) persistentSpeakerStates[controllerId] = state;
-                onSuccess?.Invoke(controllerId);
-                Log.Debug($"[AudioManagerAPI] Allocated controller ID {controllerId} with priority {priority} (persistent: {persistent}) at {Timing.LocalTime}.");
-                return controllerId;
+                availableIds.Push(i);
             }
         }
 
         /// <summary>
-        /// Updates the stop callback for an already‐allocated controller ID.
+        /// Registers a new audio session and attempts to allocate a physical controller ID.
         /// </summary>
-        /// <param name="controllerId">
-        /// The ID whose callback should be replaced.
-        /// </param>
-        /// <param name="stopCallback">
-        /// The new action to invoke when stopping or evicting this speaker.
-        /// </param>
-        public static void UpdateStopCallback(byte controllerId, Action stopCallback)
+        public static bool TryAllocate(AudioPriority priority, Action stopCallback, SpeakerState state, out int sessionId, out byte controllerId)
         {
+            Action callbackToInvoke = null;
+
             lock (lockObject)
             {
-                if (controllerPriorities.TryGetValue(controllerId, out var entry))
+                sessionId = nextSessionId++;
+                controllerId = 0;
+
+                // Create session record
+                var session = new SessionData
                 {
-                    controllerPriorities[controllerId] = (entry.priority, stopCallback, entry.persistent);
-                    Log.Debug($"[AudioManagerAPI] Updated stop callback for controller ID {controllerId} at {Timing.LocalTime}.");
+                    Priority = priority,
+                    StopCallback = stopCallback,
+                    State = state,
+                    CurrentControllerId = null
+                };
+
+                // 1. Try to get a free physical ID
+                if (availableIds.Count > 0)
+                {
+                    controllerId = availableIds.Pop();
+                }
+                // 2. No free IDs, try to evict a lower priority session
+                else
+                {
+                    byte? evictedId = TryEvictLowerPriority(priority, out callbackToInvoke);
+                    if (evictedId.HasValue)
+                    {
+                        controllerId = evictedId.Value;
+                    }
+                }
+
+                // If we got a physical ID (either free or evicted)
+                if (controllerId != 0)
+                {
+                    session.CurrentControllerId = controllerId;
+                    activeControllers[controllerId] = sessionId;
+                    activeSessions[sessionId] = session;
+
+                    Log.Debug($"[AudioManagerAPI] Session {sessionId} allocated controller ID {controllerId} with priority {priority} at {Timing.LocalTime}.");
+                }
+                else
+                {
+                    // Allocation failed, but we still might want to keep the session state if it's persistent
+                    if (state != null && state.Persistent)
+                    {
+                        activeSessions[sessionId] = session;
+                        Log.Debug($"[AudioManagerAPI] Session {sessionId} failed allocation but state saved (persistent) at {Timing.LocalTime}.");
+                    }
                 }
             }
+
+            // Invoke eviction callback OUTSIDE the lock
+            callbackToInvoke?.Invoke();
+
+            return controllerId != 0;
+        }
+
+        /// <summary>
+        /// Internal method to find and evict a lower priority session. MUST be called inside lock.
+        /// </summary>
+        private static byte? TryEvictLowerPriority(AudioPriority newPriority, out Action evictionCallback)
+        {
+            evictionCallback = null;
+            byte? candidateId = null;
+            int? candidateSessionId = null;
+            AudioPriority lowestFound = newPriority;
+
+            // Find the lowest priority active controller
+            foreach (var kvp in activeControllers)
+            {
+                int sId = kvp.Value;
+                if (activeSessions.TryGetValue(sId, out var session))
+                {
+                    // We look for strictly lower priority
+                    if (session.Priority < lowestFound)
+                    {
+                        lowestFound = session.Priority;
+                        candidateId = kvp.Key;
+                        candidateSessionId = sId;
+                    }
+                }
+            }
+
+            if (candidateId.HasValue && candidateSessionId.HasValue)
+            {
+                // We found a victim
+                var victimSession = activeSessions[candidateSessionId.Value];
+
+                // Prepare callback for external execution
+                evictionCallback = victimSession.StopCallback;
+
+                // Update victim's state
+                victimSession.CurrentControllerId = null;
+                activeSessions[candidateSessionId.Value] = victimSession; // Update struct
+
+                // If victim isn't persistent, remove its session entirely
+                if (victimSession.State == null || !victimSession.State.Persistent)
+                {
+                    activeSessions.Remove(candidateSessionId.Value);
+                }
+
+                activeControllers.Remove(candidateId.Value);
+                Log.Debug($"[AudioManagerAPI] Evicted session {candidateSessionId.Value} from controller {candidateId.Value}.");
+                return candidateId.Value;
+            }
+
+            return null; // Nothing lower priority found
         }
 
         /// <summary>
         /// Releases a controller ID, making it available for reuse.
         /// </summary>
-        /// <param name="controllerId">
-        /// The ID to release.
-        /// </param>
-        /// <param name="forceRemoveState">
-        /// If <c>true</c>, permanently discards any persistent state tied to this ID.
-        /// If <c>false</c>, moves it to the eviction cache for potential later restoration.
-        /// </param>
-        public static void ReleaseId(byte controllerId, bool forceRemoveState = false)
+        public static void ReleaseController(byte controllerId)
         {
             lock (lockObject)
             {
-                if (controllerPriorities.Remove(controllerId))
+                if (activeControllers.TryGetValue(controllerId, out int sessionId))
                 {
-                    if (persistentSpeakerStates.ContainsKey(controllerId))
+                    activeControllers.Remove(controllerId);
+                    availableIds.Push(controllerId); // Return to pool
+
+                    if (activeSessions.TryGetValue(sessionId, out var session))
                     {
-                        if (forceRemoveState)
+                        session.CurrentControllerId = null;
+                        activeSessions[sessionId] = session;
+
+                        // If not persistent, clean up the session
+                        if (session.State == null || !session.State.Persistent)
                         {
-                            persistentSpeakerStates.Remove(controllerId);
-                            Log.Warn($"[AudioManagerAPI] Force-removed state for persistent speaker ID {controllerId}. This action is irreversible. Are you sure this is intended?");
+                            activeSessions.Remove(sessionId);
                         }
                     }
-                    Log.Debug($"[AudioManagerAPI] Released controller ID {controllerId} at {Timing.LocalTime}.");
+                    Log.Debug($"[AudioManagerAPI] Released controller ID {controllerId} (from session {sessionId}) at {Timing.LocalTime}.");
                 }
             }
         }
 
         /// <summary>
-        /// Retrieves the state object associated with a speaker, whether it is currently
-        /// active or has been evicted.
+        /// Returns physical ID of the controller currently associated with a session, if any. Returns false if session doesn't exist or has no active controller.
         /// </summary>
-        /// <param name="controllerId">
-        /// The controller ID whose state you want to retrieve.
-        /// </param>
-        /// <returns>
-        /// The stored state object if found; otherwise, <c>null</c>.
-        /// </returns>
-        public static object GetSpeakerState(byte controllerId)
+        public static bool TryGetActiveController(int sessionId, out byte controllerId)
         {
             lock (lockObject)
             {
-                return persistentSpeakerStates.TryGetValue(controllerId, out var state) ? state : null;
+                if (activeSessions.TryGetValue(sessionId, out var session) && session.CurrentControllerId.HasValue)
+                {
+                    controllerId = session.CurrentControllerId.Value;
+                    return true;
+                }
+
+                controllerId = 0;
+                return false;
             }
         }
 
         /// <summary>
-        /// Clears all cached states of evicted persistent speakers.
+        /// Retrieves the state object associated with a session ID.
         /// </summary>
-        /// <remarks>
-        /// Use this to free memory if you no longer need to restore any evicted speaker states.
-        /// </remarks>
-        public static void CleanupEvictedSpeakers()
+        public static SpeakerState GetSessionState(int sessionId)
         {
             lock (lockObject)
             {
-                persistentSpeakerStates.Clear();
-                Log.Debug($"[AudioManagerAPI] Cleared all persistent speaker states at {Timing.LocalTime}.");
+                return activeSessions.TryGetValue(sessionId, out var session) ? session.State : null;
+            }
+        }
+
+        /// <summary>
+        /// Removes a session entirely, freeing its state memory.
+        /// </summary>
+        public static void DestroySession(int sessionId)
+        {
+            lock (lockObject)
+            {
+                if (activeSessions.TryGetValue(sessionId, out var session))
+                {
+                    if (session.CurrentControllerId.HasValue)
+                    {
+                        // Force release the physical controller if it's active
+                        ReleaseController(session.CurrentControllerId.Value);
+                    }
+                    activeSessions.Remove(sessionId);
+                    Log.Debug($"[AudioManagerAPI] Destroyed session {sessionId}.");
+                }
             }
         }
     }

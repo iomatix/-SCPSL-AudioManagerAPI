@@ -1,40 +1,27 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Numerics;
-
-namespace AudioManagerAPI.Features.Speakers
+﻿namespace AudioManagerAPI.Features.Speakers
 {
+    using System;
+    using UnityEngine;
+
     /// <summary>
-    /// Represents a speaker capable of playing audio samples at a specific position.
+    /// Represents a physical hardware speaker capable of playing audio samples,
+    /// managing volume, and spatial positioning.
     /// </summary>
     public interface ISpeaker
     {
-
         /// <summary>
         /// Occurs when the speaker's playback queue has finished processing all audio clips.
         /// </summary>
-        /// <remarks>
-        /// Useful for triggering cleanup operations, transitioning to fallback content, or notifying systems  
-        /// that audio playback has completed without any queued items remaining.
-        /// </remarks>
         event Action QueueEmpty;
 
         /// <summary>
-        /// Plays the specified audio samples starting from the given playback position within the clip.
+        /// Plays the specified audio samples starting from the given playback position.
         /// </summary>
-        /// <param name="samples">The PCM audio samples to play.</param>
-        /// <param name="loop">Whether the audio should loop continuously.</param>
-        /// <param name="playbackPosition">
-        /// The starting playback position within the audio clip, in seconds or sample offset.
-        /// Use 0 to start from the beginning.
-        /// </param>
         void Play(float[] samples, bool loop, float playbackPosition = 0f);
 
         /// <summary>
         /// Queues additional audio samples to play after the current ones.
         /// </summary>
-        /// <param name="samples">The PCM audio samples to queue.</param>
-        /// <param name="loop">Whether the queued audio should loop.</param>
         void Queue(float[] samples, bool loop);
 
         /// <summary>
@@ -45,7 +32,6 @@ namespace AudioManagerAPI.Features.Speakers
         /// <summary>
         /// Skips the current or queued audio clips.
         /// </summary>
-        /// <param name="count">The number of clips to skip, including the current one.</param>
         void Skip(int count);
 
         /// <summary>
@@ -61,19 +47,43 @@ namespace AudioManagerAPI.Features.Speakers
         /// <summary>
         /// Fades in the audio volume over the specified duration.
         /// </summary>
-        /// <param name="duration">The duration of the fade-in in seconds.</param>
         void FadeIn(float duration);
 
         /// <summary>
         /// Fades out the audio volume over the specified duration and stops playback.
         /// </summary>
-        /// <param name="duration">The duration of the fade-out in seconds.</param>
-        /// <param name="onComplete">An optional callback invoked after fade-out and stop are completed.</param>
         void FadeOut(float duration, Action onComplete = null);
 
         /// <summary>
-        /// Destroys the speaker, releasing all associated resources.
+        /// Destroys the speaker, releasing all associated LabAPI and Unity resources.
         /// </summary>
         void Destroy();
+
+        // Moved from ISpeakerWithPlayerFilter to base:
+
+        /// <summary>
+        /// Sets the volume of the audio (0.0 to 1.0).
+        /// </summary>
+        void SetVolume(float volume);
+
+        /// <summary>
+        /// Sets the minimum distance for audio falloff in Unity units.
+        /// </summary>
+        void SetMinDistance(float minDistance);
+
+        /// <summary>
+        /// Sets the maximum distance for audio falloff in Unity units.
+        /// </summary>
+        void SetMaxDistance(float maxDistance);
+
+        /// <summary>
+        /// Sets whether the audio is spatialized (3D audio).
+        /// </summary>
+        void SetSpatialization(bool isSpatial);
+
+        /// <summary>
+        /// Sets the 3D world position of the physical speaker.
+        /// </summary>
+        void SetPosition(Vector3 position);
     }
 }

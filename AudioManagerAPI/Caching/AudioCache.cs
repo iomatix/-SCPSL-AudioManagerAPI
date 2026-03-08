@@ -1,12 +1,14 @@
-﻿
-namespace AudioManagerAPI.Cache
+﻿namespace AudioManagerAPI.Cache
 {
     using System;
     using System.Collections.Generic;
     using System.IO;
+    using System.Text;
+
+    using Log = LabApi.Features.Console.Logger;
 
     /// <summary>
-    /// Manages a cache of audio samples with LRU eviction and lazy loading capabilities.
+    /// Manages a thread-safe cache of audio samples with LRU eviction and asynchronous lazy loading capabilities.
     /// </summary>
     public class AudioCache
     {
@@ -32,46 +34,72 @@ namespace AudioManagerAPI.Cache
         /// <summary>
         /// Registers an audio stream provider for lazy loading.
         /// </summary>
-        /// <param name="key">The unique key for the audio.</param>
-        /// <param name="streamProvider">A function that provides the audio stream when needed.</param>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="key"/> or <paramref name="streamProvider"/> is null.</exception>
         public void Register(string key, Func<Stream> streamProvider)
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
+            if (streamProvider == null) throw new ArgumentNullException(nameof(streamProvider));
+
             lock (lockObject)
             {
                 if (!streamProviders.ContainsKey(key))
                 {
-                    streamProviders[key] = streamProvider ?? throw new ArgumentNullException(nameof(streamProvider));
+                    streamProviders[key] = streamProvider;
                 }
             }
         }
 
         /// <summary>
-        /// Retrieves audio samples, loading them if necessary.
+        /// Retrieves audio samples, loading them from the stream if necessary without blocking the cache.
         /// </summary>
-        /// <param name="key">The key identifying the audio.</param>
-        /// <returns>The audio samples, or <c>null</c> if unavailable.</returns>
         public float[] Get(string key)
         {
+            Func<Stream> providerToExecute = null;
+
             lock (lockObject)
             {
-                if (cache.TryGetValue(key, out var samples))
+                if (cache.TryGetValue(key, out var cachedSamples))
                 {
-                    lruOrder.Remove(key);
-                    lruOrder.AddFirst(key);
-                    return samples;
+                    UpdateLRU(key);
+                    return cachedSamples;
                 }
 
-                if (!streamProviders.TryGetValue(key, out var provider))
+                if (!streamProviders.TryGetValue(key, out providerToExecute))
                 {
                     return null;
                 }
+            }
 
-                samples = LoadAudio(provider());
-                if (samples == null)
+            // Execute I/O and decoding OUTSIDE the lock to prevent server thread blocking
+            Stream stream = null;
+            try
+            {
+                stream = providerToExecute();
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"[AudioManagerAPI] Failed to invoke stream provider for key '{key}': {ex.Message}");
+                return null;
+            }
+
+            float[] newSamples = null;
+            if (stream != null)
+            {
+                newSamples = LoadAudio(stream, key);
+            }
+
+            if (newSamples == null)
+            {
+                return null;
+            }
+
+            // Lock again to safely integrate the newly loaded samples
+            lock (lockObject)
+            {
+                // Double-check: another thread might have loaded it while we were doing I/O
+                if (cache.TryGetValue(key, out var existingSamples))
                 {
-                    return null;
+                    UpdateLRU(key);
+                    return existingSamples;
                 }
 
                 if (cache.Count >= maxSize)
@@ -79,38 +107,81 @@ namespace AudioManagerAPI.Cache
                     var lruKey = lruOrder.Last.Value;
                     cache.Remove(lruKey);
                     lruOrder.RemoveLast();
+                    Log.Debug($"[AudioManagerAPI] Evicted cached audio '{lruKey}' due to memory limits.");
                 }
 
-                cache[key] = samples;
+                cache[key] = newSamples;
                 lruOrder.AddFirst(key);
-                return samples;
+                return newSamples;
             }
         }
 
+        private void UpdateLRU(string key)
+        {
+            lruOrder.Remove(key);
+            lruOrder.AddFirst(key);
+        }
+
         /// <summary>
-        /// Supports only 48kHz, Mono, Singed 16-bit PCM .wav files
+        /// Robustly parses 48kHz, Mono, Signed 16-bit PCM .wav files.
+        /// Searches for the actual "data" chunk instead of blindly skipping 44 bytes.
         /// </summary>
-        private float[] LoadAudio(Stream stream)
+        private float[] LoadAudio(Stream stream, string key)
         {
             try
             {
-                using (var reader = new BinaryReader(stream))
+                using (stream)
+                using (var reader = new BinaryReader(stream, Encoding.ASCII))
                 {
-                    reader.BaseStream.Seek(44, SeekOrigin.Begin); // Skip WAV header
-                    byte[] rawData = reader.ReadBytes((int)(stream.Length - 44));
-                    float[] samples = new float[rawData.Length / 2];
-                    for (int i = 0; i < samples.Length; i++)
+                    // Verify RIFF container
+                    string riffHeader = new string(reader.ReadChars(4));
+                    if (riffHeader != "RIFF")
                     {
-                        samples[i] = BitConverter.ToInt16(rawData, i * 2) / 32768f;
+                        Log.Warn($"[AudioManagerAPI] Audio cache failed for '{key}': Not a valid RIFF file.");
+                        return null;
                     }
-                    return samples;
+
+                    reader.ReadInt32(); // File size
+                    string waveHeader = new string(reader.ReadChars(4));
+                    if (waveHeader != "WAVE")
+                    {
+                        Log.Warn($"[AudioManagerAPI] Audio cache failed for '{key}': Not a valid WAVE file.");
+                        return null;
+                    }
+
+                    // Scan chunks to locate "data"
+                    while (reader.BaseStream.Position < reader.BaseStream.Length)
+                    {
+                        string chunkId = new string(reader.ReadChars(4));
+                        int chunkSize = reader.ReadInt32();
+
+                        if (chunkId == "data")
+                        {
+                            byte[] rawData = reader.ReadBytes(chunkSize);
+                            float[] samples = new float[rawData.Length / 2];
+
+                            // High-performance manual bitwise conversion
+                            for (int i = 0; i < samples.Length; i++)
+                            {
+                                short pcmValue = (short)(rawData[i * 2] | (rawData[i * 2 + 1] << 8));
+                                samples[i] = pcmValue / 32768f;
+                            }
+                            return samples;
+                        }
+
+                        // Skip other non-audio chunks (like "fmt ", "LIST", "INFO")
+                        reader.BaseStream.Seek(chunkSize, SeekOrigin.Current);
+                    }
+
+                    Log.Warn($"[AudioManagerAPI] Audio cache failed for '{key}': No 'data' chunk found.");
+                    return null;
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                Log.Error($"[AudioManagerAPI] Audio cache exception while loading '{key}': {ex.Message}");
                 return null;
             }
         }
     }
-
 }

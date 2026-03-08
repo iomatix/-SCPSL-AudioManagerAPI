@@ -3,34 +3,27 @@
     using UnityEngine;
 
     /// <summary>
-    /// Defines a factory for creating and managing speaker instances.
+    /// Defines a hardware-level factory for creating and managing physical speaker instances based on controller IDs.
     /// </summary>
     public interface ISpeakerFactory
     {
         /// <summary>
-        /// Creates a speaker at the specified position with a unique controller ID.
+        /// Creates a physical speaker at the specified position with a unique controller ID (1-254).
         /// </summary>
-        /// <param name="position">The 3D world position for audio playback.</param>
-        /// <param name="controllerId">The unique controller ID.</param>
-        /// <returns>An <see cref="ISpeaker"/> instance, or null if creation fails.</returns>
         ISpeaker CreateSpeaker(Vector3 position, byte controllerId);
 
         /// <summary>
-        /// Gets an existing speaker by its controller ID.
+        /// Gets an existing physical speaker by its controller ID.
         /// </summary>
-        /// <param name="controllerId">The controller ID of the speaker.</param>
-        /// <returns>The <see cref="ISpeaker"/> instance, or null if not found.</returns>
         ISpeaker GetSpeaker(byte controllerId);
 
         /// <summary>
-        /// Removes a speaker from the factory's management, if supported.
+        /// Removes a speaker from the factory's management and destroys it.
         /// </summary>
-        /// <param name="controllerId">The controller ID of the speaker to remove.</param>
-        /// <returns>True if the speaker was removed, false otherwise.</returns>
         bool RemoveSpeaker(byte controllerId);
 
         /// <summary>
-        /// Clears all managed speakers, if supported (e.g., on round restart).
+        /// Clears all managed speakers and frees hardware controllers.
         /// </summary>
         void ClearSpeakers();
     }
