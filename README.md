@@ -6,3 +6,8 @@ A lightweight, reusable C# library for managing audio playback in SCP: Secret La
 
 > ⚠️ **Important:** [See README](AudioManagerAPI/README.md)
 
+## Contributions
+
+<a href="https://github.com/iomatix/SCPSL-AudioManagerAPI/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=iomatix/SCPSL-AudioManagerAPI" />
+</a>
