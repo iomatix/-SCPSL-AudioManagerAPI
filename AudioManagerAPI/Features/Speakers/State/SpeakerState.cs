@@ -103,11 +103,20 @@
         /// </summary>
         public bool IsPaused { get; set; }
 
+        #region Real-Time Audio Streaming
         /// <summary>
         /// A FIFO queue of PCM buffers waiting to be played by this session.
         /// Used for real-time audio streaming.
         /// </summary>
         public Queue<short[]> PcmQueue { get; } = new Queue<short[]>();
+
+        /// <summary>
+        /// Indicates wheter the session is stream only - without static audio.
+        /// Used for real-time audio streaming.
+        /// </summary>
+        public bool IsStreamOnly { get; set; }
+        #endregion
+
 
     }
 }

@@ -2,7 +2,7 @@
 {
     using AudioManagerAPI.Features.Enums;
     using AudioManagerAPI.Speakers.State;
-    using LabApi.Features.Wrappers; // Dodane dla typu Player
+    using LabApi.Features.Wrappers;
     using System;
     using System.IO;
     using UnityEngine;
@@ -90,15 +90,15 @@
         /// </summary>
         /// <returns>The session ID, or 0 if initialization fails.</returns>
         int PlayGlobalAudio(
-            string key, 
-            bool loop = false, 
-            float volume = 1f, 
-            AudioPriority priority = AudioPriority.Medium, 
-            Func<Player, bool> validPlayersFilter = null, 
-            bool queue = false, 
-            float fadeInDuration = 0f, 
-            bool persistent = false, 
-            float? lifespan = null, 
+            string key,
+            bool loop = false,
+            float volume = 1f,
+            AudioPriority priority = AudioPriority.Medium,
+            Func<Player, bool> validPlayersFilter = null,
+            bool queue = false,
+            float fadeInDuration = 0f,
+            bool persistent = false,
+            float? lifespan = null,
             bool autoCleanup = false);
 
         /// <summary>
@@ -174,6 +174,7 @@
         /// </summary>
         void CleanupAllSessions();
 
+        #region Audio Streaming
         /// <summary>
         /// Appends raw PCM audio data to the playback queue of an existing session.
         /// <para>
@@ -199,6 +200,13 @@
         /// </remarks>
         void AppendPcmData(int sessionId, short[] pcm);
 
+        /// <summary>
+        /// Creates a new audio stream session at the specified 3D position with configurable distance, spatialization,
+        /// priority, and player filtering.
+        /// </summary>
+        int CreateStreamSession(Vector3 position, bool isSpatial, float minDistance, float maxDistance, float volume, AudioPriority priority = AudioPriority.Medium, Func<Player, bool> validPlayersFilter = null, bool persistent = false, float? lifespan = null, bool autoCleanup = false);
+
+        #endregion
 
         #endregion
     }

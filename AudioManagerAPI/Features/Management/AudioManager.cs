@@ -469,7 +469,7 @@
             }
         }
 
-        #region Real-Time Streaming
+        #region Real-Time Audio Streaming
         public void AppendPcmData(int sessionId, short[] pcm)
         {
             // Get session state from ControllerIdManager
@@ -486,6 +486,71 @@
                 state.PhysicalSpeaker.AppendPcm(pcm);
             }
         }
+
+        public int CreateStreamSession(
+    Vector3 position,
+    bool isSpatial,
+    float minDistance,
+    float maxDistance,
+    float volume,
+    AudioPriority priority = AudioPriority.Medium,
+    Func<Player, bool> validPlayersFilter = null,
+    bool persistent = false,
+    float? lifespan = null,
+    bool autoCleanup = false)
+        {
+            lock (lockObject)
+            {
+                var state = new SpeakerState
+                {
+                    Key = null,
+                    Position = position,
+                    Loop = false,
+                    Volume = volume,
+                    MinDistance = minDistance,
+                    MaxDistance = maxDistance,
+                    IsSpatial = isSpatial,
+                    Priority = priority,
+                    PlayerFilter = validPlayersFilter,
+                    QueuedClips = new List<(string key, bool loop)>(),
+                    Persistent = persistent,
+                    Lifespan = lifespan,
+                    AutoCleanup = autoCleanup,
+                    PlaybackPosition = 0f,
+                    IsPaused = false,
+                    IsStreamOnly = true
+                };
+
+                int allocatedSessionId = 0;
+                Action stopCallback = () =>
+                {
+                    if (allocatedSessionId != 0)
+                        FadeOutAudio(allocatedSessionId, this.Options.DefaultFadeOutDuration);
+                };
+
+                if (!ControllerIdManager.TryAllocate(priority, stopCallback, state, out allocatedSessionId, out byte controllerId))
+                {
+                    Log.Warn("[AudioManagerAPI] Failed to initialize stream-only session.");
+                    return 0;
+                }
+
+                if (controllerId != 0)
+                {
+                    // Send null as initialSamples, false, false
+                    InitializePhysicalSpeaker(
+                        controllerId,
+                        allocatedSessionId,
+                        state,
+                        initialSamples: null,
+                        initialLoop: false,
+                        isQueued: false);
+                }
+
+                return allocatedSessionId;
+            }
+        }
+
+
 
         #endregion
     }
