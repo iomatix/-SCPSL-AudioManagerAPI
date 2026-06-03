@@ -1,6 +1,6 @@
 ﻿# SCPSL-AudioManagerAPI — Changelog
 
-## 2.1.1 — Stream‑Only Sessions (No Audio Key Required)
+## 2.1.1 - 2.1.2 — Stream‑Only Sessions (No Audio Key Required)
 
 ### Added
 
@@ -22,6 +22,7 @@
 
 ### Fixed
 
+- Resolved issues with audio-streaming interruptions.
 - Removed warnings such as: `[AudioManagerAPI] Audio with key X not found in cache.` Stream‑only sessions no longer require dummy audio keys.
 - Ensured `AppendPcmData` works even when no static audio was ever loaded.
 
