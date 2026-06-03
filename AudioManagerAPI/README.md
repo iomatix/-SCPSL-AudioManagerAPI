@@ -87,7 +87,7 @@ For 3D audio or targeting specific players, use the `Instance` directly.
 
 ## 🎤 Real‑Time PCM Streaming (NEW in 2.1.0)
 
-AudioManagerAPI now supports **real‑time audio streaming** using raw PCM buffers.
+AudioManagerAPI 2.1.0 introduces native real‑time PCM streaming, allowing plugins to push raw audio data directly into an active session.
 
 This feature is ideal for:
 
@@ -102,30 +102,66 @@ This feature is ideal for:
 - 48 kHz  
 - Mono  
 - Signed 16‑bit PCM  
-- `short[]` buffer  
+- Provided as a `short[]` buffer  
 
-### Example: Streaming PCM Into an Existing Session
+### Example: 🚀 Creating a Stream‑Only Audio Session
+
 ```csharp
-    // Assume you already created a spatial session for a player:
-    int sessionId = DefaultAudioManager.Instance.PlayAudio(
-        key: "scp_voice_dynamic",
-        position: player.Position,
-        loop: false,
-        volume: 1f,
-        minDistance: 1f,
-        maxDistance: 20f,
-        isSpatial: true
-    );
+int sessionId = DefaultAudioManager.Instance.CreateStreamSession(
+    position: player.Position,
+    isSpatial: true,
+    minDistance: 0.05f,
+    maxDistance: 20f,
+    volume: 1f,
+    priority: AudioPriority.High,
+    validPlayersFilter: p => p.PlayerId != player.PlayerId
+);
+```
 
-    // Later, when new PCM arrives (e.g., from an Opus decoder):
-    short[] pcmBuffer = GetPcmFromOpusDecoder();
+#### This creates a fully initialized audio session with:
+
+- a physical speaker (if available)
+- spatialization
+- distance attenuation
+- player filtering
+- no static audio clip
+- ready to receive PCM
+
+### Example: 🔊 Streaming PCM Into an Existing Session
+
+Whenever new PCM arrives (e.g., from an Opus decoder):
+
+```csharp
+    short[] pcmBuffer = GetDecodedPcm(); // 48kHz mono PCM
     DefaultAudioManager.Instance.AppendPcmData(sessionId, pcmBuffer);
 ```
-### Automatic Routing
 
-- If the session has a physical speaker, PCM is forwarded immediately to the hardware buffer.  
-- If the session is evicted, PCM is stored in `SpeakerState.PcmQueue`.  
-- When the session is recovered, queued PCM is played automatically.
+#### The PCM is:
+
+- queued in `SpeakerState.PcmQueue`
+- forwarded to the physical speaker (if allocated)
+- played immediately in real time
+
+### Example: 🔁 Updating the Speaker Position
+
+For moving audio sources (e.g., players), update the session position:
+```csharp
+DefaultAudioManager.Instance.SetSessionPosition(sessionId, player.Position);
+```
+
+### Example: 🧹 Cleaning Up
+
+To stop a streaming session:
+```csharp
+DefaultAudioManager.Instance.DestroySession(sessionId);
+```
+
+### NOTES
+
+- Stream‑only sessions do not require any audio key.
+- `CreateStreamSession` is the recommended way to implement proximity voice or any dynamic audio pipeline.
+- PCM is processed in real time and does not require pre‑loaded audio clips.
+- Works seamlessly with `ISpeakerWithPlayerFilter` for per‑player visibility.
 
 ---
 
