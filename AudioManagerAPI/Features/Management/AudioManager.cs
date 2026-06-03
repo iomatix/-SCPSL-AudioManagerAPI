@@ -189,6 +189,8 @@
 
         private void InitializePhysicalSpeaker(byte controllerId, int sessionId, SpeakerState state, float[] initialSamples, bool initialLoop, bool isQueued)
         {
+            Log.Debug($"[AudioManagerAPI] InitializePhysicalSpeaker: session={sessionId}, controllerId={controllerId}, hasSamples={(initialSamples != null)}");
+
             ISpeaker speaker = speakerFactory.CreateSpeaker(state.Position, controllerId);
             if (speaker == null)
             {
@@ -205,6 +207,9 @@
             }
 
             speakers[controllerId] = speaker;
+
+            state.PhysicalSpeaker = speaker;
+            state.HasPhysicalSpeaker = true;
 
             if (isQueued)
             {
@@ -488,16 +493,16 @@
         }
 
         public int CreateStreamSession(
-    Vector3 position,
-    bool isSpatial,
-    float minDistance,
-    float maxDistance,
-    float volume,
-    AudioPriority priority = AudioPriority.Medium,
-    Func<Player, bool> validPlayersFilter = null,
-    bool persistent = false,
-    float? lifespan = null,
-    bool autoCleanup = false)
+            Vector3 position,
+            bool isSpatial,
+            float minDistance,
+            float maxDistance,
+            float volume,
+            AudioPriority priority = AudioPriority.Medium,
+            Func<Player, bool> validPlayersFilter = null,
+            bool persistent = false,
+            float? lifespan = null,
+            bool autoCleanup = false)
         {
             lock (lockObject)
             {
