@@ -12,6 +12,7 @@ Designed to integrate seamlessly with Northwood’s LabAPI ecosystem, **AudioMan
 
 - [SCP-575 NPC](https://github.com/iomatix/-SCPSL-SCP-575-NPC)
 - [Omega-Warhead](https://github.com/iomatix/-SCPSL-OmegaWarhead)
+- [SCP-Immersive-Voice](https://github.com/iomatix/-SCPSL-SCP-Immersive-Voice)
 
 ---
 
