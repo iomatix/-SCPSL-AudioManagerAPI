@@ -9,7 +9,7 @@
     using LabApi.Features.Audio;
     using LabApi.Features.Wrappers;
 
-    using Log = DebugLogger;
+    using Log = AudioManagerAPI.Logger.ApiLogger;
 
     /// <summary>
     /// Adapts LabAPI's <see cref="SpeakerToy"/> to the <see cref="ISpeakerWithPlayerFilter"/> interface,

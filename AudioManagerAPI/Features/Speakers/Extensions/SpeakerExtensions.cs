@@ -10,8 +10,7 @@
     using AudioManagerAPI.Features.Speakers;
     using AudioManagerAPI.Speakers.State;
     using LabApi.Features.Wrappers;
-
-    using Log = DebugLogger;
+    using Log = AudioManagerAPI.Logger.ApiLogger;
     using UnityEngine;
 
     /// <summary>

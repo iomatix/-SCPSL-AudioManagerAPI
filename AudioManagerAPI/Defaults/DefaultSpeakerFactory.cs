@@ -5,7 +5,7 @@
     using System.Collections.Concurrent;
     using UnityEngine;
 
-    using Log = DebugLogger;
+    using Log = AudioManagerAPI.Logger.ApiLogger;
 
     /// <summary>
     /// Default factory that produces and manages <see cref="DefaultSpeakerToyAdapter"/> instances.

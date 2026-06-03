@@ -6,7 +6,7 @@
     using AudioManagerAPI.Features.Enums;
     using AudioManagerAPI.Speakers.State;
 
-    using Log = DebugLogger;
+    using Log = AudioManagerAPI.Logger.ApiLogger;
 
     /// <summary>
     /// Manages physical audio controller IDs (1-254) with priority-based allocation.
