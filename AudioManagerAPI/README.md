@@ -38,7 +38,8 @@ The core of the architecture relies on the separation between **Abstract Session
 
 ### 1. Registering Audio
 
-Before playing audio, register your `48kHz, Mono, Signed 16-bit PCM .wav` files. The asynchronous `AudioCache` will handle lazy-loading without blocking the server thread.
+Before playing audio, register your audio files. AudioCache automatically decodes WAV (16/24/32‑bit PCM or IEEE float), downmixes to mono, and resamples to 48 kHz.
+The asynchronous `AudioCache` will handle lazy-loading without blocking the server thread.
 ```csharp
     using AudioManagerAPI.Defaults;
     using System.Reflection;
@@ -49,6 +50,15 @@ Before playing audio, register your `48kHz, Mono, Signed 16-bit PCM .wav` files.
             Assembly.GetExecutingAssembly().GetManifestResourceStream("MyPlugin.Audio.sound.wav"));
     }
 ```
+
+AudioCache automatically handles:
+- WAV PCM 16/24/32‑bit
+- WAV IEEE float
+- automatic mono downmix
+- automatic resampling to 48 kHz
+- always returns float[] samples
+- MP3 decoding (via built‑in lightweight decoder)
+
 ### 2. Playing Audio
 
 Use the `DefaultAudioManager` facade to play audio. It returns an `int` Session ID.
@@ -97,12 +107,14 @@ This feature is ideal for:
 - dynamic sound effects  
 - procedural audio systems  
 
-### PCM Format Requirements
+### PCM Format Requirements (Float‑Native)
 
 - 48 kHz  
 - Mono  
-- Signed 16‑bit PCM  
-- Provided as a `short[]` buffer  
+- Normalized float PCM (-1.0 to 1.0)  
+- Provided as a `float[]` buffer  
+
+A legacy `short[]` overload exists for backward compatibility.
 
 ### Example: 🚀 Creating a Stream‑Only Audio Session
 
@@ -132,8 +144,13 @@ int sessionId = DefaultAudioManager.Instance.CreateStreamSession(
 Whenever new PCM arrives (e.g., from an Opus decoder):
 
 ```csharp
-    short[] pcmBuffer = GetDecodedPcm(); // 48kHz mono PCM
+    float[] pcmBuffer = GetDecodedFloatPcm();   // normalized float PCM (-1..1)
     DefaultAudioManager.Instance.AppendPcmData(sessionId, pcmBuffer);
+```
+Legacy short[] example (deprecated):
+```csharp
+    short[] legacy = GetDecodedShortPcm();
+    DefaultAudioManager.Instance.AppendPcmData(sessionId, legacy);
 ```
 
 #### The PCM is:
@@ -160,8 +177,20 @@ DefaultAudioManager.Instance.DestroySession(sessionId);
 
 - Stream‑only sessions do not require any audio key.
 - `CreateStreamSession` is the recommended way to implement proximity voice or any dynamic audio pipeline.
-- PCM is processed in real time and does not require pre‑loaded audio clips.
+- Float PCM (-1..1) is processed in real time and does not require pre‑loaded audio clips.
 - Works seamlessly with `ISpeakerWithPlayerFilter` for per‑player visibility.
+
+## 🎧 Float‑Native Audio Pipeline (NEW in 2.2.0)
+
+AudioManagerAPI now uses a fully float‑native audio pipeline:
+
+- AudioCache decodes all audio into float[]
+- Real‑time streaming uses float[] buffers
+- ISpeaker.AppendPcm(float[]) is the primary low‑level API
+- short[] overloads remain only for backward compatibility
+- MP3 files are automatically decoded and converted to float[]
+
+This ensures maximum audio quality with no quantization, clipping, or integer PCM artifacts.
 
 ---
 
@@ -200,24 +229,24 @@ This file is fault-tolerant and will safely fall back to defaults if misconfigur
 5. **Use `AudioFilters` Safely**  
    Custom filters are now `Func<Player, bool>`. If you use dynamic conditions, wrap them properly to avoid pass-by-value bugs (e.g., `AudioFilters.IsConditionTrue(() => Round.IsStarted)`).
 
-### Migration from V2.0.0 to V2.1.0
+### Migration from V2.0.0 to V2.2.0
 
-Version **2.1.0** is backwards compatible with 2.0.0 for all existing static audio use-cases.  
+Version **2.2.0** is backwards compatible with 2.0.0 and 2.1.0 for all existing static audio use-cases.  
 New functionality is opt-in and focused on real-time PCM streaming.
 
-**New in 2.1.0:**
+**New in 2.1.0 - 2.2.0:**
 
 1. `IAudioManager.AppendPcmData(int sessionId, short[] pcm)`  
    - Allows streaming raw PCM buffers into an existing session.  
    - Intended for proximity voice, synthesized speech, and other dynamic audio sources.  
-   - The caller is responsible for providing 48kHz, mono, 16-bit PCM.
+   - The caller should provide normalized float PCM (-1..1). A short[] overload remains available for backward compatibility.
 
-2. `ISpeaker.AppendPcm(short[] pcm)`  
+2. `ISpeaker.AppendPcm(float[] samples) — primary method` `ISpeaker.AppendPcm(short[] pcm) — legacy wrapper`  
    - Low-level method used by the router to forward PCM directly to the hardware speaker buffer.  
    - Implemented by the default LabAPI-based speaker adapter.
 
 3. `SpeakerState.PcmQueue`  
-   - A FIFO queue of PCM buffers used to store audio when a session is temporarily evicted from hardware.  
+   - SpeakerState.PcmQueue — A FIFO queue of float[] PCM buffers (normalized -1..1) used to store audio when a session is temporarily evicted from hardware.  
    - Ensures that no audio is lost during hardware eviction and recovery.
 
 **No breaking changes:**

@@ -108,7 +108,7 @@
         /// A FIFO queue of PCM buffers waiting to be played by this session.
         /// Used for real-time audio streaming.
         /// </summary>
-        public Queue<short[]> PcmQueue { get; } = new Queue<short[]>();
+        public Queue<float[]> PcmQueue { get; } = new Queue<float[]>();
 
         /// <summary>
         /// Indicates wheter the session is stream only - without static audio.
