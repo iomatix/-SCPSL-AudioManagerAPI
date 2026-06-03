@@ -187,45 +187,76 @@
             return sessionId;
         }
 
-        private void InitializePhysicalSpeaker(byte controllerId, int sessionId, SpeakerState state, float[] initialSamples, bool initialLoop, bool isQueued)
+        private void InitializePhysicalSpeaker(
+            byte controllerId,
+            int sessionId,
+            SpeakerState state,
+            float[] initialSamples,
+            bool initialLoop,
+            bool isQueued)
         {
             Log.Debug($"[AudioManagerAPI] InitializePhysicalSpeaker: session={sessionId}, controllerId={controllerId}, hasSamples={(initialSamples != null)}");
 
+            // Create the physical speaker instance (LabAPI SpeakerToy wrapper)
             ISpeaker speaker = speakerFactory.CreateSpeaker(state.Position, controllerId);
             if (speaker == null)
             {
+                // If creation fails, release the hardware controller slot
                 ControllerIdManager.ReleaseController(controllerId);
                 Log.Warn($"[AudioManagerAPI] Failed to create physical speaker for session {sessionId} (Controller ID: {controllerId}).");
                 return;
             }
 
+            // Configure spatial audio parameters (volume, distance, spatialization)
             speaker.Configure(state.Volume, state.MinDistance, state.MaxDistance, state.IsSpatial, null);
 
+            // Apply player filter (who can hear this speaker)
             if (speaker is ISpeakerWithPlayerFilter filterSpeaker && state.PlayerFilter != null)
             {
                 filterSpeaker.SetValidPlayers(state.PlayerFilter);
             }
 
+            // Register the speaker in the internal controller → speaker map
             speakers[controllerId] = speaker;
 
+            // Link the physical speaker to the session state
             state.PhysicalSpeaker = speaker;
             state.HasPhysicalSpeaker = true;
 
-            if (isQueued)
+            // --- STREAM‑ONLY MODE FIX ---
+            // If this is a stream‑only session (initialSamples == null),
+            // we must activate the audio pipeline by calling Play() with an empty buffer.
+            //
+            // SpeakerToy does NOT start its internal AudioSource until Play() is called.
+            // Without this, Queue() from AppendPcm() will never produce audible sound.
+            if (initialSamples == null)
             {
+                // Activate playback pipeline with an empty clip
+                speaker.Play(Array.Empty<float>(), false, 0f);
+            }
+            else if (isQueued)
+            {
+                // Queue static audio if this session is using queued playback
                 speaker.Queue(initialSamples, initialLoop);
             }
-            else if (initialSamples != null)
+            else
             {
+                // Normal static audio playback
                 speaker.Play(initialSamples, initialLoop, state.PlaybackPosition);
                 OnPlaybackStarted?.Invoke(sessionId);
             }
 
+            // Auto-cleanup / lifespan handling
             if (state.AutoCleanup || state.Lifespan.HasValue)
             {
-                speaker.StartAutoStop(controllerId, state.Lifespan ?? float.MaxValue, state.AutoCleanup, _ => FadeOutAudio(sessionId, this.Options.DefaultFadeOutDuration));
+                speaker.StartAutoStop(
+                    controllerId,
+                    state.Lifespan ?? float.MaxValue,
+                    state.AutoCleanup,
+                    _ => FadeOutAudio(sessionId, this.Options.DefaultFadeOutDuration));
             }
         }
+
 
         public bool SetSessionVolume(int sessionId, float volume)
         {
