@@ -232,7 +232,7 @@
             if (initialSamples == null)
             {
                 // Activate playback pipeline with an empty clip
-                speaker.Play(Array.Empty<float>(), false, 0f);
+                speaker.Play(new float[] { 0f }, false, 0f);
             }
             else if (isQueued)
             {
