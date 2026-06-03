@@ -1,6 +1,31 @@
-# SCPSL-AudioManagerAPI � Changelog
+﻿# SCPSL-AudioManagerAPI — Changelog
 
-## 2.1.0 � Real-Time PCM Streaming
+## 2.1.1 — Stream‑Only Sessions (No Audio Key Required)
+
+### Added
+
+- `IAudioManager.CreateStreamSession(...)`
+	- Creates a spatial audio session without requiring any audio key or cached clip.
+	- Designed for real‑time PCM pipelines such as proximity voice chat.
+
+- Stream‑only mode in `SpeakerState`
+	- `IsStreamOnly = true`
+	- skips static audio playback
+	- initializes a physical speaker ready for PCM input only
+
+### Changed
+
+- `InitializePhysicalSpeaker(...)`
+	- safely handles `initialSamples == null`
+	- configures spatialization, volume, distance, and filters
+	- does not attempt to play or queue static audio
+
+### Fixed
+
+- Removed warnings such as: `[AudioManagerAPI] Audio with key X not found in cache.` Stream‑only sessions no longer require dummy audio keys.
+- Ensured `AppendPcmData` works even when no static audio was ever loaded.
+
+## 2.1.0 — Real-Time PCM Streaming
 
 **Release focus:** dynamic audio, proximity voice, and live PCM pipelines.
 
@@ -38,7 +63,7 @@
 
 ---
 
-## 2.0.0 � Session-Based Architecture Overhaul
+## 2.0.0 — Session-Based Architecture Overhaul
 
 - Replaced hardware Controller IDs (`byte`) with abstract Session IDs (`int`).  
 - Introduced `ControllerIdManager` for priority-based hardware allocation and eviction.  
@@ -58,7 +83,7 @@
 
 ---
 
-## 1.x � Initial Releases
+## 1.x — Initial Releases
 
 - Basic audio playback via LabAPI `SpeakerToy`.  
 - Global and spatial playback.  
