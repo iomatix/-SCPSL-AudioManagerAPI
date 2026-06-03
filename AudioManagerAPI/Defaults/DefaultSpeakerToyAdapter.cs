@@ -349,5 +349,16 @@
             }
             onComplete?.Invoke();
         }
+
+        public void AppendPcm(short[] pcm)
+        {
+            float[] samples = new float[pcm.Length];
+            for (int i = 0; i < pcm.Length; i++)
+                samples[i] = pcm[i] / 32768f;
+
+            // put directly into hardware queue
+            this.Queue(samples, loop: false);
+        }
+
     }
 }

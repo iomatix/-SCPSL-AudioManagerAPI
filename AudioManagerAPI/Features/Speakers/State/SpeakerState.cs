@@ -1,6 +1,7 @@
 ﻿namespace AudioManagerAPI.Speakers.State
 {
     using AudioManagerAPI.Features.Enums;
+    using AudioManagerAPI.Features.Speakers;
     using LabApi.Features.Wrappers;
     using System;
     using System.Collections.Generic;
@@ -16,6 +17,16 @@
         /// The unique audio key used to identify and retrieve the associated PCM samples.
         /// </summary>
         public string Key { get; set; }
+
+        /// <summary>
+        /// Instance of the physical speaker currently allocated to this session, if any.
+        /// </summary>
+        public ISpeaker PhysicalSpeaker;
+
+        /// <summary>
+        /// Indicates whether the device has a physical speaker.
+        /// </summary>
+        public bool HasPhysicalSpeaker;
 
         /// <summary>
         /// The 3D world-space position where the audio was originally placed.
@@ -91,5 +102,12 @@
         /// Required to restore the correct state if a physical speaker is evicted and later re-allocated.
         /// </summary>
         public bool IsPaused { get; set; }
+
+        /// <summary>
+        /// A FIFO queue of PCM buffers waiting to be played by this session.
+        /// Used for real-time audio streaming.
+        /// </summary>
+        public Queue<short[]> PcmQueue { get; } = new Queue<short[]>();
+
     }
 }

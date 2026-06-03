@@ -468,5 +468,25 @@
                 Log.Info("[AudioManagerAPI] All audio sessions and physical controllers have been cleaned up.");
             }
         }
+
+        #region Real-Time Streaming
+        public void AppendPcmData(int sessionId, short[] pcm)
+        {
+            // Get session state from ControllerIdManager
+            var state = ControllerIdManager.GetSessionState(sessionId);
+            if (state == null)
+                return;
+
+            // Save PCM to the abstract queue in the session state
+            state.PcmQueue.Enqueue(pcm);
+
+            // if session has a physical speaker, forward the PCM data immediately to the hardware buffer
+            if (state.HasPhysicalSpeaker && state.PhysicalSpeaker != null)
+            {
+                state.PhysicalSpeaker.AppendPcm(pcm);
+            }
+        }
+
+        #endregion
     }
 }

@@ -173,6 +173,33 @@
         /// Cleans up all active sessions and releases their controller IDs.
         /// </summary>
         void CleanupAllSessions();
+
+        /// <summary>
+        /// Appends raw PCM audio data to the playback queue of an existing session.
+        /// <para>
+        /// This method enables real-time audio streaming for dynamic sources such as
+        /// proximity voice chat, synthesized speech, or procedurally generated audio.
+        /// </para>
+        /// <para>
+        /// If the session currently holds a physical speaker controller, the PCM data
+        /// is forwarded immediately to the hardware buffer. Otherwise, the data is
+        /// stored in the session's abstract queue and will be played automatically
+        /// once the session is recovered.
+        /// </para>
+        /// </summary>
+        /// <param name="sessionId">
+        /// The unique identifier of the audio session.
+        /// </param>
+        /// <param name="pcm">
+        /// A buffer of 48 kHz, mono, 16-bit signed PCM samples.
+        /// </param>
+        /// <remarks>
+        /// This method does not perform resampling or format conversion. The caller
+        /// must ensure that the PCM buffer matches the engine's required format.
+        /// </remarks>
+        void AppendPcmData(int sessionId, short[] pcm);
+
+
         #endregion
     }
 }

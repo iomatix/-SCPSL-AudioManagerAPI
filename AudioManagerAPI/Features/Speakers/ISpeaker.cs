@@ -85,5 +85,15 @@
         /// Sets the 3D world position of the physical speaker.
         /// </summary>
         void SetPosition(Vector3 position);
+
+        /// <summary>
+        /// Appends raw PCM audio samples (48 kHz, mono, 16-bit) directly to the speaker's
+        /// hardware buffer for real-time audio streaming.
+        /// </summary>
+        /// <param name="pcm">
+        /// A buffer of signed 16-bit PCM samples. The caller must ensure the format is correct.
+        /// </param>
+        void AppendPcm(short[] pcm);
+
     }
 }
