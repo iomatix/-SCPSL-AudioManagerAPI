@@ -28,11 +28,13 @@
 		<PackageTags>audio scpsl scp-sl labapi unity speaker scp secret laboratory scp-exiled scpsl-exiled exiled scp-api scpsl-api exiled-api api manager controller management features admin toy speaker</PackageTags>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<PackageLicenseFile>LICENSE</PackageLicenseFile>
+		<PackageChangelogFile>CHANGELOG.md</PackageChangelogFile>
 	</PropertyGroup>
 
 	<ItemGroup>
 		<None Remove="LICENSE" />
 		<None Remove="README.md" />
+		<None Remove="CHANGELOG.md" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -42,6 +44,11 @@
 			<Visible>true</Visible>
 		</None>
 		<None Include="README.md">
+			<Pack>true</Pack>
+			<PackagePath></PackagePath>
+			<Visible>true</Visible>
+		</None>
+		<None Include="CHANGELOG.md">
 			<Pack>true</Pack>
 			<PackagePath></PackagePath>
 			<Visible>true</Visible>
