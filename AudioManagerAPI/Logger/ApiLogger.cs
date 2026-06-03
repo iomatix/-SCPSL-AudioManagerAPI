@@ -1,7 +1,7 @@
-﻿namespace AudioManagerAPI
+﻿namespace AudioManagerAPI.Logger
 {
     using Log = LabApi.Features.Console.Logger;
-    public static class DebugLogger
+    public static class ApiLogger
     {
         [System.Diagnostics.Conditional("DEBUG")]
         public static void Debug(string message) => Log.Debug(message);
