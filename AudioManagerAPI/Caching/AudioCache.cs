@@ -4,73 +4,96 @@
     using System.Collections.Generic;
     using System.IO;
     using System.Text;
+    using System.Threading;
+    using MEC;
 
     using Log = LabApi.Features.Console.Logger;
 
     /// <summary>
-    /// Manages a thread-safe cache of audio samples with LRU eviction and asynchronous lazy loading capabilities.
+    /// Thread-safe audio sample cache implementing predictive background pre-decoding, 
+    /// lock-free multi-format parsing, and least-recently-used (LRU) memory eviction.
     /// </summary>
     public class AudioCache
     {
         private const int TargetSampleRate = 48000;
-        private readonly int maxSize;
-        private readonly Dictionary<string, float[]> cache;
-        private readonly LinkedList<string> lruOrder;
-        private readonly Dictionary<string, Func<Stream>> streamProviders;
-        private readonly object lockObject = new object();
+        private readonly int _maxSize;
+        private readonly Dictionary<string, float[]> _cache;
+        private readonly LinkedList<string> _lruOrder;
+        private readonly Dictionary<string, Func<Stream>> _streamProviders;
+        private readonly object _lockObject = new object();
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="AudioCache"/> class.
-        /// </summary>
-        /// <param name="maxSize">The maximum number of audio samples to cache before eviction.</param>
-        /// <exception cref="ArgumentException">Thrown if <paramref name="maxSize"/> is not positive.</exception>
         public AudioCache(int maxSize = 50)
         {
-            this.maxSize = maxSize > 0 ? maxSize : throw new ArgumentException("Cache size must be positive.", nameof(maxSize));
-            cache = new Dictionary<string, float[]>();
-            lruOrder = new LinkedList<string>();
-            streamProviders = new Dictionary<string, Func<Stream>>();
+            _maxSize = maxSize > 0 ? maxSize : throw new ArgumentException("Cache size must be positive.", nameof(maxSize));
+            _cache = new Dictionary<string, float[]>();
+            _lruOrder = new LinkedList<string>();
+            _streamProviders = new Dictionary<string, Func<Stream>>();
         }
 
         /// <summary>
-        /// Registers an audio stream provider for lazy loading.
+        /// Registers a stream provider and dispatches a background worker thread to proactively 
+        /// pre-decode the asset into RAM, eliminating first-play disk I/O stutter.
         /// </summary>
         public void Register(string key, Func<Stream> streamProvider)
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
             if (streamProvider == null) throw new ArgumentNullException(nameof(streamProvider));
 
-            lock (lockObject)
+            lock (_lockObject)
             {
-                if (!streamProviders.ContainsKey(key))
-                {
-                    streamProviders[key] = streamProvider;
-                }
+                if (_streamProviders.ContainsKey(key))
+                    return;
+
+                _streamProviders[key] = streamProvider;
             }
+
+            // Offloading execution to the global thread pool instantly avoids blocking the server boostrap process.
+            ThreadPool.QueueUserWorkItem(state =>
+            {
+                try
+                {
+                    Stream stream = streamProvider();
+                    if (stream == null) return;
+
+                    float[] samples = LoadAudio(stream, key);
+                    if (samples == null) return;
+
+                    lock (_lockObject)
+                    {
+                        if (_cache.ContainsKey(key)) return;
+                        CommitCacheInsertion(key, samples);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error($"[AudioManagerAPI] Predictive background audio warmup failed for '{key}': {ex.Message}");
+                }
+            });
         }
 
         /// <summary>
-        /// Retrieves audio samples, loading them from the stream if necessary without blocking the cache.
+        /// Resolves audio sample references, executing on-demand lock-free decoding 
+        /// only if the predictive background warmup has not completed yet.
         /// </summary>
         public float[] Get(string key)
         {
             Func<Stream> providerToExecute = null;
 
-            lock (lockObject)
+            lock (_lockObject)
             {
-                if (cache.TryGetValue(key, out var cachedSamples))
+                if (_cache.TryGetValue(key, out var cachedSamples))
                 {
                     UpdateLRU(key);
                     return cachedSamples;
                 }
 
-                if (!streamProviders.TryGetValue(key, out providerToExecute))
+                if (!_streamProviders.TryGetValue(key, out providerToExecute))
                 {
                     return null;
                 }
             }
 
-            // Execute I/O and decoding OUTSIDE the lock to prevent server thread blocking
+            // I/O block runs detached from the lock to secure server frame-rate stability if a cache-miss occurs.
             Stream stream = null;
             try
             {
@@ -82,45 +105,44 @@
                 return null;
             }
 
-            float[] newSamples = null;
-            if (stream != null)
-            {
-                newSamples = LoadAudio(stream, key);
-            }
+            float[] newSamples = stream != null ? LoadAudio(stream, key) : null;
+            if (newSamples == null) return null;
 
-            if (newSamples == null)
+            lock (_lockObject)
             {
-                return null;
-            }
-
-            // Lock again to safely integrate the newly loaded samples
-            lock (lockObject)
-            {
-                // Double-check: another thread might have loaded it while we were doing I/O
-                if (cache.TryGetValue(key, out var existingSamples))
+                // Double-Check Pattern: Validates if a background thread committed the identical asset during our detached I/O loop.
+                if (_cache.TryGetValue(key, out var existingSamples))
                 {
                     UpdateLRU(key);
                     return existingSamples;
                 }
 
-                if (cache.Count >= maxSize)
-                {
-                    var lruKey = lruOrder.Last.Value;
-                    cache.Remove(lruKey);
-                    lruOrder.RemoveLast();
-                    Log.Debug($"[AudioManagerAPI] Evicted cached audio '{lruKey}' due to memory limits.");
-                }
-
-                cache[key] = newSamples;
-                lruOrder.AddFirst(key);
+                CommitCacheInsertion(key, newSamples);
                 return newSamples;
             }
         }
 
+        /// <summary>
+        /// Inserts an item into memory maps and handles LRU tracking mechanics under lock safety.
+        /// </summary>
+        private void CommitCacheInsertion(string key, float[] samples)
+        {
+            if (_cache.Count >= _maxSize)
+            {
+                var lruKey = _lruOrder.Last.Value;
+                _cache.Remove(lruKey);
+                _lruOrder.RemoveLast();
+                Log.Debug($"[AudioManagerAPI] Evicted cached audio '{lruKey}' due to memory limits.");
+            }
+
+            _cache[key] = samples;
+            _lruOrder.AddFirst(key);
+        }
+
         private void UpdateLRU(string key)
         {
-            lruOrder.Remove(key);
-            lruOrder.AddFirst(key);
+            _lruOrder.Remove(key);
+            _lruOrder.AddFirst(key);
         }
 
         private float[] LoadAudio(Stream stream, string key)
@@ -130,7 +152,8 @@
                 using (stream)
                 using (var reader = new BinaryReader(stream, Encoding.ASCII, leaveOpen: false))
                 {
-                    // Peek first 4 bytes to detect format
+                    if (stream.Length < 4) return null;
+
                     var header = reader.ReadBytes(4);
                     reader.BaseStream.Seek(0, SeekOrigin.Begin);
 
@@ -143,10 +166,7 @@
                     if (header[0] == 0xFF && (header[1] & 0xE0) == 0xE0)
                         return LoadMp3AsFloat(reader, key);
 
-                    // Fallback: try raw 32-bit float PCM (mono, 48kHz)
                     return LoadRawFloatPcm(reader, key);
-
-
                 }
             }
             catch (Exception ex)
@@ -158,20 +178,9 @@
 
         private float[] LoadWavAsFloat(BinaryReader reader, string key)
         {
-            string riffHeader = new string(reader.ReadChars(4));
-            if (riffHeader != "RIFF")
-            {
-                Log.Warn($"[AudioManagerAPI] Audio cache failed for '{key}': Not a valid RIFF file.");
-                return null;
-            }
-
+            if (new string(reader.ReadChars(4)) != "RIFF") return null;
             reader.ReadInt32(); // File size
-            string waveHeader = new string(reader.ReadChars(4));
-            if (waveHeader != "WAVE")
-            {
-                Log.Warn($"[AudioManagerAPI] Audio cache failed for '{key}': Not a valid WAVE file.");
-                return null;
-            }
+            if (new string(reader.ReadChars(4)) != "WAVE") return null;
 
             int channels = 1;
             int sampleRate = TargetSampleRate;
@@ -207,15 +216,10 @@
                 }
             }
 
-            if (dataBytes == null)
-            {
-                Log.Warn($"[AudioManagerAPI] Audio cache failed for '{key}': No 'data' chunk found.");
-                return null;
-            }
+            if (dataBytes == null) return null;
 
             var samples = ConvertPcmToFloat(dataBytes, audioFormat, bitsPerSample, channels, key);
-            if (samples == null)
-                return null;
+            if (samples == null) return null;
 
             if (channels > 1)
                 samples = DownmixToMono(samples, channels);
@@ -231,28 +235,33 @@
             int frameCount;
             float[] samples;
 
+            // Multiplication is historically faster than division within hot loops.
+            const float int16Inverse = 1f / 32768f;
+            const float int24Inverse = 1f / 8388608f;
+            const float int32Inverse = 1f / 2147483648f;
+
             switch (bitsPerSample)
             {
                 case 16:
                     frameCount = rawData.Length / 2 / channels;
                     samples = new float[frameCount * channels];
-                    for (int i = 0; i < frameCount * channels; i++)
+                    for (int i = 0; i < samples.Length; i++)
                     {
                         short pcm = (short)(rawData[i * 2] | (rawData[i * 2 + 1] << 8));
-                        samples[i] = pcm / 32768f;
+                        samples[i] = pcm * int16Inverse;
                     }
                     return samples;
 
                 case 24:
                     frameCount = rawData.Length / 3 / channels;
                     samples = new float[frameCount * channels];
-                    for (int i = 0; i < frameCount * channels; i++)
+                    for (int i = 0; i < samples.Length; i++)
                     {
                         int index = i * 3;
                         int value = (rawData[index] | (rawData[index + 1] << 8) | (rawData[index + 2] << 16));
                         if ((value & 0x800000) != 0)
                             value |= unchecked((int)0xFF000000);
-                        samples[i] = value / 8388608f;
+                        samples[i] = value * int24Inverse;
                     }
                     return samples;
 
@@ -262,15 +271,15 @@
 
                     if (audioFormat == 3) // IEEE float
                     {
-                        for (int i = 0; i < frameCount * channels; i++)
+                        for (int i = 0; i < samples.Length; i++)
                             samples[i] = BitConverter.ToSingle(rawData, i * 4);
                     }
-                    else // PCM 32-bit
+                    else // PCM 32-bit Integer
                     {
-                        for (int i = 0; i < frameCount * channels; i++)
+                        for (int i = 0; i < samples.Length; i++)
                         {
                             int value = BitConverter.ToInt32(rawData, i * 4);
-                            samples[i] = value / 2147483648f;
+                            samples[i] = value * int32Inverse;
                         }
                     }
                     return samples;
@@ -283,8 +292,7 @@
 
         private float[] DownmixToMono(float[] samples, int channels)
         {
-            if (channels == 1)
-                return samples;
+            if (channels == 1) return samples;
 
             int frames = samples.Length / channels;
             var mono = new float[frames];
@@ -304,14 +312,15 @@
 
         private float[] ResampleLinear(float[] input, int srcRate, int dstRate)
         {
-            if (srcRate == dstRate || input.Length == 0)
-                return input;
+            if (srcRate == dstRate || input.Length == 0) return input;
 
             double ratio = (double)dstRate / srcRate;
             int outLength = (int)Math.Max(1, Math.Round(input.Length * ratio));
             var output = new float[outLength];
 
             double pos = 0.0;
+            double step = 1.0 / ratio;
+
             for (int i = 0; i < outLength; i++)
             {
                 int idx = (int)pos;
@@ -328,7 +337,7 @@
                     output[i] = (float)(a + (b - a) * frac);
                 }
 
-                pos += 1.0 / ratio;
+                pos += step;
             }
 
             return output;
@@ -338,13 +347,8 @@
         {
             try
             {
-                // Read entire MP3 file
                 byte[] mp3Bytes = reader.ReadBytes((int)(reader.BaseStream.Length - reader.BaseStream.Position));
-                if (mp3Bytes.Length < 4)
-                {
-                    Log.Warn($"[AudioManagerAPI] MP3 '{key}' is too small.");
-                    return null;
-                }
+                if (mp3Bytes.Length < 4) return null;
 
                 using (var mp3Stream = new MemoryStream(mp3Bytes))
                 using (var mp3Reader = new NAudio.Wave.Mp3FileReader(mp3Stream))
@@ -353,7 +357,6 @@
                     int channels = waveFormat.Channels;
                     int sampleRate = waveFormat.SampleRate;
 
-                    // Convert MP3 → PCM16
                     using (var pcmStream = NAudio.Wave.WaveFormatConversionStream.CreatePcmStream(mp3Reader))
                     using (var mem = new MemoryStream())
                     {
@@ -364,17 +367,14 @@
                         short[] pcm16 = new short[sampleCount];
                         Buffer.BlockCopy(pcmBytes, 0, pcm16, 0, pcmBytes.Length);
 
-                        // Convert PCM16 → float
                         float[] samples = new float[sampleCount];
                         const float inv = 1f / 32768f;
                         for (int i = 0; i < sampleCount; i++)
                             samples[i] = pcm16[i] * inv;
 
-                        // Downmix if needed
                         if (channels > 1)
                             samples = DownmixToMono(samples, channels);
 
-                        // Resample if needed
                         if (sampleRate != TargetSampleRate)
                             samples = ResampleLinear(samples, sampleRate, TargetSampleRate);
 
@@ -392,11 +392,7 @@
         private float[] LoadRawFloatPcm(BinaryReader reader, string key)
         {
             var bytes = reader.ReadBytes((int)(reader.BaseStream.Length - reader.BaseStream.Position));
-            if (bytes.Length % 4 != 0)
-            {
-                Log.Warn($"[AudioManagerAPI] Audio cache failed for '{key}': Raw float PCM size is not divisible by 4.");
-                return null;
-            }
+            if (bytes.Length % 4 != 0) return null;
 
             int sampleCount = bytes.Length / 4;
             var samples = new float[sampleCount];
@@ -405,6 +401,5 @@
 
             return samples;
         }
-
     }
 }
