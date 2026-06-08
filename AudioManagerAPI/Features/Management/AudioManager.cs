@@ -249,11 +249,18 @@
             // Auto-cleanup / lifespan handling
             if (state.AutoCleanup || state.Lifespan.HasValue)
             {
+                float targetLifespan = state.Lifespan ?? float.MaxValue;
+
+                // ADAPTIVE TIMING GATES: If the intended runtime lifecycle is shorter than 0.5 seconds (micro-transients),
+                // we bypass the global default fade duration profile. Overriding with 0.0f achieves a precise 
+                // physical cutoff switch point, preventing internal Dissonance stream overlap errors.
+                float adaptiveFadeOutDuration = targetLifespan < 0.5f ? 0f : this.Options.DefaultFadeOutDuration;
+
                 speaker.StartAutoStop(
                     controllerId,
-                    state.Lifespan ?? float.MaxValue,
+                    targetLifespan,
                     state.AutoCleanup,
-                    _ => FadeOutAudio(sessionId, this.Options.DefaultFadeOutDuration));
+                    _ => FadeOutAudio(sessionId, adaptiveFadeOutDuration));
             }
         }
 
@@ -416,15 +423,40 @@
 
             lock (lockObject)
             {
+                var state = GetSessionState(sessionId);
+                if (state == null) return;
+
                 if (ControllerIdManager.TryGetActiveController(sessionId, out byte controllerId) && speakers.TryGetValue(controllerId, out var speaker))
                 {
-                    speaker.FadeOut(duration, () => DestroySession(sessionId));
+                    // Direct closure invocation on a native worker audio thread will crash Unity if it touches GameObjects.
+                    // We encapsulate the state destruction payload inside an abstract lambda.
+                    speaker.FadeOut(duration, () =>
+                    {
+                        // MARSHALLING GATES: Safely dispatch the structural component teardown back to Unity's Main Thread.
+                        MEC.Timing.RunCoroutine(DestroySessionDeferred(sessionId), MEC.Segment.Update);
+                    });
                 }
                 else
                 {
-                    // Destroy immediately if no physical speaker is active
-                    DestroySession(sessionId);
+                    // ANTI-RACE STRATEGY: If a fade request arrives on frame 0 before 'InitializePhysicalSpeaker' 
+                    // registers the key in our local dictionary, we MUST NOT drop the session instantly.
+                    // We defer eviction by exactly one frame loop to allow reference resolution to stabilize.
+                    MEC.Timing.RunCoroutine(DestroySessionDeferred(sessionId), MEC.Segment.Update);
                 }
+            }
+        }
+
+        /// <summary>
+        /// Asynchronously marshals session data destruction to prevent thread affinity deadlocks under lock contentions.
+        /// </summary>
+        private IEnumerator<float> DestroySessionDeferred(int sessionId)
+        {
+            yield return MEC.Timing.WaitForOneFrame;
+
+            // Re-locking securely on the main thread update pass to safely wipe tracking indices.
+            lock (lockObject)
+            {
+                DestroySession(sessionId);
             }
         }
 

@@ -47,7 +47,7 @@
     /// </remarks>
     public static class DefaultAudioManager
     {
-        public static AudioOptions Options => (Instance as AudioManager)?.Options ?? throw new InvalidOperationException("DefaultAudioManager.Instance is not AudioManager.");
+        public static AudioOptions Options => Instance.Options;
 
         /// <summary>
         /// Singleton AudioManager instance initialized lazily on first access

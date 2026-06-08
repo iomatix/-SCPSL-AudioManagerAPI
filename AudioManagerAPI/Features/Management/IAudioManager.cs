@@ -13,6 +13,7 @@
     public interface IAudioManager
     {
         #region Events
+
         /// <summary>
         /// Occurs when a session begins audio playback.
         /// </summary>
