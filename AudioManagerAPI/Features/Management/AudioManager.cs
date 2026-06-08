@@ -538,22 +538,36 @@
         }
 
         #region Real-Time Audio Streaming
+        [Obsolete("Use AppendPcmData(int, float[]) instead.")]
         public void AppendPcmData(int sessionId, short[] pcm)
         {
-            // Get session state from ControllerIdManager
-            var state = ControllerIdManager.GetSessionState(sessionId);
-            if (state == null)
+            if (pcm == null || pcm.Length == 0)
                 return;
 
-            // Save PCM to the abstract queue in the session state
-            state.PcmQueue.Enqueue(pcm);
+            var samples = new float[pcm.Length];
+            const float inv = 1f / 32768f;
 
-            // if session has a physical speaker, forward the PCM data immediately to the hardware buffer
-            if (state.HasPhysicalSpeaker && state.PhysicalSpeaker != null)
-            {
-                state.PhysicalSpeaker.AppendPcm(pcm);
-            }
+            for (int i = 0; i < pcm.Length; i++)
+                samples[i] = pcm[i] * inv;
+
+            AppendPcmData(sessionId, samples);
         }
+
+
+        public void AppendPcmData(int sessionId, float[] samples)
+        {
+            var state = ControllerIdManager.GetSessionState(sessionId);
+            if (state == null || samples == null || samples.Length == 0)
+                return;
+
+            // enqueue float samples
+            state.PcmQueue.Enqueue(samples);
+
+            // forward to hardware if available
+            if (state.HasPhysicalSpeaker && state.PhysicalSpeaker != null)
+                state.PhysicalSpeaker.AppendPcm(samples);
+        }
+
 
         public int CreateStreamSession(
             Vector3 position,

@@ -87,13 +87,20 @@
         void SetPosition(Vector3 position);
 
         /// <summary>
-        /// Appends raw PCM audio samples (48 kHz, mono, 16-bit) directly to the speaker's
+        /// Appends raw PCM audio samples (48 kHz, mono, float -1..1) directly to the speaker's
         /// hardware buffer for real-time audio streaming.
         /// </summary>
-        /// <param name="pcm">
-        /// A buffer of signed 16-bit PCM samples. The caller must ensure the format is correct.
+        /// <param name="samples">
+        /// A buffer of normalized float PCM samples.
         /// </param>
+        void AppendPcm(float[] samples);
+
+        /// <summary>
+        /// Legacy overload for backward compatibility. Converts short PCM to float internally.
+        /// </summary>
+        [Obsolete("Use AppendPcm(float[]) instead. This overload exists only for backward compatibility.")]
         void AppendPcm(short[] pcm);
+
 
     }
 }

@@ -19,7 +19,7 @@
 		<IsPackable>true</IsPackable>
 		<IncludeContentInPack>true</IncludeContentInPack>
 		<PackageId>SCPSL-AudioManagerAPI</PackageId>
-		<Version>2.1.2</Version>
+		<Version>2.2.0</Version>
 		<RuntimeIdentifiers>win;win-x64;win-x86</RuntimeIdentifiers>
 		<PackageProjectUrl>https://github.com/iomatix/-SCPSL-AudioManagerAPI</PackageProjectUrl>
 		<RepositoryUrl>https://github.com/iomatix/-SCPSL-AudioManagerAPI.git</RepositoryUrl>
@@ -57,6 +57,7 @@
 
 	<ItemGroup>
 		<PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.300" PrivateAssets="All" />
+		<PackageReference Include="NAudio" Version="2.3.0" />
 		<PackageReference Include="Northwood.LabAPI" Version="1.1.7" />
 		<PackageReference Include="System.Text.Json" Version="10.0.8" />
 		<None Include="$(OutputPath)\$(AssemblyName).xml">

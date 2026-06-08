@@ -1,5 +1,34 @@
 ﻿# SCPSL-AudioManagerAPI — Changelog
 
+## 🆕 Changelog — Version 2.2.0
+
+### Float‑Native Audio Pipeline
+- All real‑time streaming APIs now use `float[]` PCM (-1..1)
+- `ISpeaker.AppendPcm(float[])` is now the primary low‑level method
+- `short[]` overloads remain for backward compatibility only
+- Eliminates quantization, clipping, and integer PCM artifacts
+
+### AudioCache Improvements
+- Full adaptive WAV loader (16/24/32‑bit PCM, IEEE float)
+- Automatic mono downmix
+- Automatic resampling to 48 kHz
+- All decoded audio is stored as `float[]`
+
+### MP3 Support (NEW)
+- AudioCache can now decode `.mp3` files
+- MP3 is automatically converted to float PCM
+- No changes required in plugin code
+
+### API Cleanup
+- `AppendPcmData(int, float[])` added as the primary streaming method
+- `AppendPcmData(int, short[])` marked as `[Obsolete]`
+- `ISpeaker.AppendPcm(short[])` marked as `[Obsolete]`
+- `SpeakerState.PcmQueue` now stores `float[]`
+
+### Backwards Compatibility
+- All existing static audio playback continues to work
+- Legacy short[] APIs still function but are deprecated
+
 ## 2.1.1 - 2.1.2 — Stream‑Only Sessions (No Audio Key Required)
 
 ### Added

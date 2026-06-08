@@ -350,13 +350,28 @@
             onComplete?.Invoke();
         }
 
+        [Obsolete("Use AppendPcm(float[]) instead. This overload exists only for backward compatibility.")]
         public void AppendPcm(short[] pcm)
         {
-            float[] samples = new float[pcm.Length];
-            for (int i = 0; i < pcm.Length; i++)
-                samples[i] = pcm[i] / 32768f;
+            if (pcm == null || pcm.Length == 0)
+                return;
 
-            // put directly into hardware queue
+            // Fast conversion without extra branching
+            var samples = new float[pcm.Length];
+            const float inv = 1f / 32768f;
+
+            for (int i = 0; i < pcm.Length; i++)
+                samples[i] = pcm[i] * inv;
+
+            AppendPcm(samples);
+        }
+
+        public void AppendPcm(float[] samples)
+        {
+            if (samples == null || samples.Length == 0)
+                return;
+
+            // Direct float-native path
             this.Queue(samples, loop: false);
         }
 
