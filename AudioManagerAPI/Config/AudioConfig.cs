@@ -1,37 +1,32 @@
 namespace AudioManagerAPI.Config
 {
+    using UnityEngine;
+
     /// <summary>
-    /// Configuration settings loaded from a JSON file (AudioConfig.json).
-    /// <para>
-    /// Used to initialize the <see cref="AudioManagerAPI.Features.Management.AudioManager"/> and define default audio system behavior.
-    /// </para>
+    /// Configuration data profile representing system capabilities and engine defaults.
     /// </summary>
     public class AudioConfig
     {
-        /// <summary>
-        /// Gets or sets the maximum number of audio clips stored in the LRU cache.
-        /// Higher values consume more RAM but reduce disk I/O for frequently played sounds.
-        /// Default is 50.
-        /// </summary>
         public int CacheSize { get; set; } = 50;
-
-        /// <summary>
-        /// Gets or sets a value indicating whether to use the built-in LabAPI SpeakerToy adapter factory.
-        /// If false, a custom factory must be provided or injected.
-        /// Default is true.
-        /// </summary>
         public bool UseDefaultSpeakerFactory { get; set; } = true;
-
-        /// <summary>
-        /// Gets or sets the default duration (in seconds) for fade-in effects when using global play methods.
-        /// Default is 1.0 second.
-        /// </summary>
         public float DefaultFadeInDuration { get; set; } = 1f;
+        public float DefaultFadeOutDuration { get; set; } = 1f;
 
         /// <summary>
-        /// Gets or sets the default duration (in seconds) for fade-out effects when audio is automatically stopped.
-        /// Default is 1.0 second.
+        /// Validates parameters defensively and forces hard system clamps 
+        /// to guarantee downstream pipeline operations never throw exceptions.
         /// </summary>
-        public float DefaultFadeOutDuration { get; set; } = 1f;
+        public void Validate()
+        {
+            // Defensive alignment: AudioCache capacity must be strictly positive.
+            if (CacheSize <= 0)
+            {
+                CacheSize = 50;
+            }
+
+            // Clamping time horizons to non-negative scalars to preserve math integrity in MEC coroutines.
+            DefaultFadeInDuration = Mathf.Max(0f, DefaultFadeInDuration);
+            DefaultFadeOutDuration = Mathf.Max(0f, DefaultFadeOutDuration);
+        }
     }
 }
