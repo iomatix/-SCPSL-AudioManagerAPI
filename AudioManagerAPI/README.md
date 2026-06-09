@@ -15,7 +15,7 @@ Designed to integrate seamlessly with Northwood’s LabAPI ecosystem, **AudioMan
 
 ---
 
-## 🏗️ Architecture Overview (V2.3.0)
+## 🏗️ Architecture Overview (V2.3.2)
 
 The core of the architecture relies on the separation between **Abstract Sessions** and **Physical Hardware**:
 
@@ -23,8 +23,9 @@ The core of the architecture relies on the separation between **Abstract Session
 2. **Hardware Eviction** – LabAPI is limited to 254 physical controllers. If the server runs out of physical speakers, the `ControllerIdManager` will safely *evict* lower-priority physical speakers. Your session remains alive in the background.
 3. **The Router** – `AudioManager` acts as a router. When you send a command (e.g., `Pause(sessionId)`), the router updates the abstract state and routes the command to the physical LabAPI speaker *only if* it is currently allocated.
 4. **Real‑Time Streaming Layer** – Sessions can receive raw PCM buffers dynamically. The router forwards PCM to hardware when available, or queues it for later playback if the session is temporarily evicted.
-5. **Main-Thread Marshalling & Deferrals (NEW in 2.3.0)** – To prevent asynchronous thread-affinity deadlocks and native Unity exceptions, all structural network speaker decompositions (`Object.Destroy`) are marshalled back to Unity's main thread loop via deferred execution gates (`MEC.Segment.Update`).
-6. **Predictive Background Pre-Decoding (NEW in 2.3.0)** – The CPU overhead of disk file I/O operations and multi-format binary parsing is entirely offloaded to background worker threads immediately upon registration, converting execution runtime queries into deterministic $O(1)$ pointer swaps.
+5. **Main-Thread Marshalling & Deferrals** – To prevent asynchronous thread-affinity deadlocks and native Unity exceptions, all structural network speaker decompositions (`Object.Destroy`) are marshalled back to Unity's main thread loop via deferred execution gates (`MEC.Segment.Update`).
+6. **Predictive Background Pre-Decoding** – The CPU overhead of disk file I/O operations and multi-format binary parsing is entirely offloaded to background worker threads immediately upon registration, converting execution runtime queries into deterministic O(1) pointer swaps.
+7. **Adaptive Micro-Transient Network Flushes (NEW in 2.3.1)** – Audio sessions with a lifespan under 0.5s automatically trigger predictive UDP network flushes, leaving a 250ms processing window for the network layer to completely flush audio data packages before structural resource eviction, preventing clipping or crackling sounds.
 
 ---
 
@@ -89,37 +90,63 @@ To play 3D audio that attaches to and dynamically tracks a moving target (e.g., 
 using AudioManagerAPI.Defaults;
 using AudioManagerAPI.Shared.Audio.Enums;
 
-// Latches a spatialized audio cue to follow a player's neck level (1.65m) 
-// pushed exactly 1mm forward along their look vector to lock HRTF directionality.
+// Latches a spatialized audio cue to dynamically track a moving player's head silhouette level (1.65m offset)
 DefaultAudioManager.Instance.PlayTrackingAudio(
-    player: targetPlayer,
-    audioKey: AudioKey.LightShortCircuit,
+    key: "scp575.light_short_circuit",
+    positionProvider: () => targetPlayer.Position + (targetPlayer.GameObject.transform.up * 1.65f),
+    validationCheck: () => targetPlayer != null && targetPlayer.IsReady && targetPlayer.IsAlive,
+    priority: AudioPriority.High,
     lifespan: 0.115f,
-    hearableForAllPlayers: true
+    targetPlayerFilter: null,
+    volume: 0.9f,
+    minDistance: 2.5f,
+    maxDistance: 18f
 );
 ```
 
 ### 5 Advanced Spatial Control (NEW in 2.3.1)
 
-Smart Spatial Injection (Phasing-Free)
-If you need an audio effect that the player triggers themselves (e.g., flashlight click), use `PlaySpatialSmart`. It creates an "Area of Interest" filter for everyone else while providing an optimized isolated channel for the owner.
+#### 1. Smart Spatial Injection (Phasing-Free)
+If you need an audio effect that a player triggers from their own position (e.g., weapon fire or a flashlight click), use `PlaySpatialSmart`. It creates an "Area of Interest" filter for nearby remote entities while providing an isolated subjective channel for the executor, eliminating audio phasing and duplicate packet load.
 
 ```csharp
-// Excludes the source player from the 3D channel, 
-// and automatically manages an isolated channel for the owner.
-DefaultAudioManager.Instance.PlaySpatialSmart("key", position, sourcePlayer);
+// Excludes the source player from the 3D environment broadcast and safely maps an isolated spatial stream for them
+DefaultAudioManager.Instance.PlaySpatialSmart(
+    key: "flashlight_click", 
+    position: player.Position, 
+    sourcePlayer: player,
+    priority: AudioPriority.Medium,
+    lifespan: 1.5f,
+    volume: 1f,
+    minDistance: 1f,
+    maxDistance: 20f
+);
 ```
 
-### 6. Trigonometric Orbiting (Paranoia Effects)
+#### 2 Trigonometric Orbiting (Paranoia Effects)
+Deploys a spatial audio session that dynamically orbits around a coordinate provider using real-time trigonometric wave calculations. Movement configurations are cleanly encapsulated via the `OrbitSettings` parameter object to prevent long parameter lists.
+
 ```csharp
-// Orbits around the player for 10 seconds
+// Configures structural rotation velocity and harmonic radial scaling
+OrbitSettings paranoiaBehavior = new OrbitSettings(
+    maxRadius: 3.2f, 
+    minRadius: 0.6f, 
+    angularSpeed: 1.1f, 
+    approachSpeed: 1.5f, 
+    heightOffset: 0.85f
+);
+
+// Launches the orbiting audio pattern around a target player for 10 seconds
 DefaultAudioManager.Instance.PlayOrbitingAudio(
     key: "scp575.whispers_mixed",
-    positionProvider: () => player.Position,
-    validationCheck: () => player.IsAlive,
+    positionProvider: () => targetPlayer.Position,
+    validationCheck: () => targetPlayer.IsAlive,
     volume: 0.8f,
     minDistance: 5f,
-    maxDistance: 20f
+    maxDistance: 20f,
+    orbitSettings: paranoiaBehavior,
+    priority: AudioPriority.Medium,
+    lifespan: 10f
 );
 ```
 
@@ -232,19 +259,12 @@ On the first launch, the API generates `Configs/AudioConfig.json` in the server 
 
 ## 🔄 Migration Guide
 
-### Migration from V2.2.0 to V2.3.1
+### Migration from V2.2.0 to V2.3.2
 
-1.Facade Method Refactoring – DefaultAudioManager.Play(...) has been removed. Use DefaultAudioManager.PlayGlobal(...) or PlayAtPosition(...).
-2. Inversion of Control (IoC) Constructor Change – AudioManager now demands a pre-validated AudioConfig instance.
-3. Interface Promotion – AudioOptions is now a mandatory contract requirement of IAudioManager.
-
-### Migration from V1.9.x to V2.0.0
-
-1. **Change ID Types** – Replace all `byte controllerId` variables with `int sessionId`.
-2. **Update API Calls** – `PlayGlobalAudio` and `PlayAudio` now return `int`.
-3. **Update API Calls** – Change `DestroySpeaker(id)` to `Stop(id)` or `DestroySession(id)`.
-4. **Remove `Action<ISpeaker>` Configurations** – Direct access to `ISpeaker` during instantiation is removed. Instead of passing a configure delegate, use the dedicated `validPlayersFilter` parameter natively supported by the `PlayAudio` method.
-5. **Use `AudioFilters` Safely** – Custom filters are now `Func<Player, bool>`. If you use dynamic conditions, wrap them properly to avoid pass-by-value bugs (e.g., `AudioFilters.IsConditionTrue(() => Round.IsStarted)`).
+1. **Facade Method Refactoring** – `DefaultAudioManager.Play(...)` has been removed. Use `DefaultAudioManager.PlayGlobal(...)` or `PlayAtPosition(...)`.
+2. **Inversion of Control (IoC) Constructor Change** – `AudioManager` now demands a pre-validated `AudioConfig` instance on startup.
+3. **Interface Promotion** – `AudioOptions` is now a mandatory contract requirement of `IAudioManager`.
+4. **Orbit Engine Objectification** – `PlayOrbitingAudio` no longer accepts loose floating-point values for spatial movement configuration. All rotational velocities and boundaries must be passed via the consolidated `OrbitSettings` parameter object.
 
 ### Migration from V2.2.0 to V2.3.0
 
@@ -268,6 +288,14 @@ Version **2.3.0** introduces design optimizations to enforce the **Dependency In
    ```csharp
    AudioOptions Options { get; }
    ```
+
+### Migration from V1.9.x to V2.0.0
+
+1. **Change ID Types** – Replace all `byte controllerId` variables with `int sessionId`.
+2. **Update API Calls** – `PlayGlobalAudio` and `PlayAudio` now return `int`.
+3. **Update API Calls** – Change `DestroySpeaker(id)` to `Stop(id)` or `DestroySession(id)`.
+4. **Remove `Action<ISpeaker>` Configurations** – Direct access to `ISpeaker` during instantiation is removed. Instead of passing a configure delegate, use the dedicated `validPlayersFilter` parameter natively supported by the `PlayAudio` method.
+5. **Use `AudioFilters` Safely** – Custom filters are now `Func<Player, bool>`. If you use dynamic conditions, wrap them properly to avoid pass-by-value bugs (e.g., `AudioFilters.IsConditionTrue(() => Round.IsStarted)`).
 
 ---
 

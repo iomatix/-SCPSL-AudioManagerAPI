@@ -5,6 +5,7 @@
     using AudioManagerAPI.Controllers;
     using AudioManagerAPI.Defaults;
     using AudioManagerAPI.Features.Enums;
+    using AudioManagerAPI.Features.Management.Settings;
     using AudioManagerAPI.Features.Speakers;
     using AudioManagerAPI.Speakers.Extensions;
     using AudioManagerAPI.Speakers.State;
@@ -189,7 +190,7 @@
             return sessionId;
         }
 
-        public (int worldSessionId, int sourceSessionId) PlaySpatialSmart(string key, Vector3 position, Player sourcePlayer, AudioPriority priority = AudioPriority.Medium, float? lifespan = null)
+        public (int worldSessionId, int sourceSessionId) PlaySpatialSmart(string key, Vector3 position, Player sourcePlayer, AudioPriority priority = AudioPriority.Medium, float? lifespan = null, float volume = 1f, float minDistance = 1f, float maxDistance = 20f)
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
 
@@ -198,9 +199,9 @@
                 key: key,
                 position: position,
                 loop: false,
-                volume: 1f,
-                minDistance: 1f,
-                maxDistance: 20f,
+                volume: volume,
+                minDistance: minDistance,
+                maxDistance: maxDistance,
                 isSpatial: true,
                 priority: priority,
                 validPlayersFilter: p => p != null && p.IsReady && (sourcePlayer == null || p.UserId != sourcePlayer.UserId),
@@ -219,9 +220,9 @@
                     key: key,
                     position: position,
                     loop: false,
-                    volume: 1f,
-                    minDistance: 1f,
-                    maxDistance: 20f,
+                    volume: volume,
+                    minDistance: minDistance,
+                    maxDistance: maxDistance,
                     isSpatial: true,
                     priority: priority,
                     validPlayersFilter: p => p != null && p.UserId == sourcePlayer.UserId,
@@ -236,7 +237,7 @@
             return (worldSession, sourceSession);
         }
 
-        public int PlayTrackingAudio(string key, Func<Vector3> positionProvider, Func<bool> validationCheck, AudioPriority priority = AudioPriority.Medium, float? lifespan = null, Func<Player, bool> targetPlayerFilter = null)
+        public int PlayTrackingAudio(string key, Func<Vector3> positionProvider, Func<bool> validationCheck, AudioPriority priority = AudioPriority.Medium, float? lifespan = null, Func<Player, bool> targetPlayerFilter = null, float volume = 1f, float minDistance = 1f, float maxDistance = 20f)
         {
             if (positionProvider == null || validationCheck == null || !validationCheck()) return 0;
 
@@ -247,9 +248,9 @@
                 key: key,
                 position: positionProvider(),
                 loop: false,
-                volume: 1f,
-                minDistance: 1f,
-                maxDistance: 20f,
+                volume: volume,
+                minDistance: minDistance,
+                maxDistance: maxDistance,
                 isSpatial: true,
                 priority: priority,
                 validPlayersFilter: targetPlayerFilter,
@@ -307,14 +308,10 @@
             float volume,
             float minDistance,
             float maxDistance,
+            OrbitSettings orbitSettings,
             AudioPriority priority = AudioPriority.Medium,
             float? lifespan = null,
-            Func<Player, bool> targetPlayerFilter = null,
-            float maxRadius = 3.2f,
-            float minRadius = 0.6f,
-            float angularSpeed = 1.1f,
-            float approachSpeed = 1.5f,
-            float heightOffset = 0.85f)
+            Func<Player, bool> targetPlayerFilter = null)
         {
             if (positionProvider == null || validationCheck == null || !validationCheck()) return 0;
 
@@ -342,16 +339,12 @@
             if (sessionId == 0) return 0;
 
             // Delegate raw coordinate mutations directly to the high-performance MEC thread context.
-            MEC.Timing.RunCoroutine(TrackAndOrbitPositionLoop(
-                positionProvider, validationCheck, sessionId, initialLifespan,
-                maxRadius, minRadius, angularSpeed, approachSpeed, heightOffset));
+            MEC.Timing.RunCoroutine(TrackAndOrbitPositionLoop(positionProvider, validationCheck, sessionId, initialLifespan, orbitSettings));
 
             return sessionId;
         }
 
-        private IEnumerator<float> TrackAndOrbitPositionLoop(
-            Func<Vector3> positionProvider, Func<bool> validationCheck, int sessionId, float duration,
-            float maxRadius, float minRadius, float angularSpeed, float approachSpeed, float heightOffset)
+        private IEnumerator<float> TrackAndOrbitPositionLoop(Func<Vector3> positionProvider, Func<bool> validationCheck, int sessionId, float duration, OrbitSettings settings)
         {
             float elapsed = 0f;
 
@@ -374,8 +367,8 @@
                 Vector3 corePosition = positionProvider();
 
                 // Compute harmonic expansion and contraction factors using mapped sine wave operations.
-                float normalizedSine = (Mathf.Sin((elapsed * approachSpeed) + approachPhaseOffset) + 1f) / 2f;
-                float currentRadius = Mathf.Lerp(minRadius, maxRadius, normalizedSine);
+                float normalizedSine = (Mathf.Sin((elapsed * settings.ApproachSpeed) + approachPhaseOffset) + 1f) / 2f;
+                float currentRadius = Mathf.Lerp(settings.MinRadius, settings.MaxRadius, normalizedSine);
 
                 // Derive circular positioning steps across plane dimensions.
                 float xOffset = Mathf.Cos(currentAngle) * currentRadius;
@@ -383,7 +376,7 @@
 
                 Vector3 projectedVector = new Vector3(
                     corePosition.x + xOffset,
-                    corePosition.y + heightOffset,
+                    corePosition.y + settings.HeightOffset,
                     corePosition.z + zOffset
                 );
 
@@ -396,13 +389,12 @@
                     yield break;
                 }
 
-                currentAngle += angularSpeed * MEC.Timing.DeltaTime;
+                currentAngle += settings.AngularSpeed * MEC.Timing.DeltaTime;
                 elapsed += MEC.Timing.DeltaTime;
 
                 yield return MEC.Timing.WaitForOneFrame;
             }
         }
-
         private void InitializePhysicalSpeaker(
             byte controllerId,
             int sessionId,

@@ -1,6 +1,7 @@
 ﻿namespace AudioManagerAPI.Features.Management
 {
     using AudioManagerAPI.Features.Enums;
+    using AudioManagerAPI.Features.Management.Settings;
     using AudioManagerAPI.Speakers.State;
     using LabApi.Features.Wrappers;
     using System;
@@ -107,46 +108,36 @@
         /// It splits rendering into a public world-space channel (excluding the source) and a private isolated
         /// 3D channel dedicated exclusively to the source player, maintaining complete spatial immersion.
         /// </summary>
-        /// <param name="key">The verified identity registry key of the audio asset.</param>
-        /// <param name="position">The initial world-space coordinates for the sound emission source.</param>
-        /// <param name="sourcePlayer">The identity context of the player who triggered the acoustic event.</param>
-        /// <param name="priority">The strict hardware allocation and eviction matrix priority tier.</param>
-        /// <param name="lifespan">An optional strict time horizon boundary before automatic structural eviction.</param>
-        /// <returns>A compound value layout containing both assigned session handles (world channel and source channel).</returns>
-        (int worldSessionId, int sourceSessionId) PlaySpatialSmart(string key, Vector3 position, Player sourcePlayer, AudioPriority priority = AudioPriority.Medium, float? lifespan = null);
+        (int worldSessionId, int sourceSessionId) PlaySpatialSmart(
+            string key,
+            Vector3 position,
+            Player sourcePlayer,
+            AudioPriority priority = AudioPriority.Medium,
+            float? lifespan = null,
+            float volume = 1f,
+            float minDistance = 1f,
+            float maxDistance = 20f);
 
         /// <summary>
         /// Instantiates an automated spatial session that dynamically updates its acoustic panning vectors
         /// by tracking a frame-by-frame coordinate generator loop.
         /// </summary>
-        /// <param name="key">The verified identity registry key of the audio asset.</param>
-        /// <param name="positionProvider">A functional delegate returning the live world coordinates of the moving target.</param>
-        /// <param name="validationCheck">A functional delegate assessing if the tracked instance context remains running and operationally valid.</param>
-        /// <param name="priority">The strict hardware allocation and eviction matrix priority tier.</param>
-        /// <param name="lifespan">The required explicit lifespan duration limit of the tracking routine pipeline loop.</param>
-        /// <param name="targetPlayerFilter">An optional predicate filter controlling visual/auditory client perception visibility maps.</param>
-        /// <returns>A unique network audio session handle identifier for tracking or runtime modification.</returns>
-        int PlayTrackingAudio(string key, Func<Vector3> positionProvider, Func<bool> validationCheck, AudioPriority priority = AudioPriority.Medium, float? lifespan = null, Func<Player, bool> targetPlayerFilter = null);
+        int PlayTrackingAudio(
+            string key,
+            Func<Vector3> positionProvider,
+            Func<bool> validationCheck,
+            AudioPriority priority = AudioPriority.Medium,
+            float? lifespan = null,
+            Func<Player, bool> targetPlayerFilter = null,
+            float volume = 1f,
+            float minDistance = 1f,
+            float maxDistance = 20f);
 
+        
         /// <summary>
-        /// Deploys a spatial audio session that dynamically orbits around a moving or static coordinate provider
-        /// using real-time trigonometric wave calculations.
+        /// Deploys a spatial audio session that dynamically orbits around a coordinate provider
+        /// using real-time trigonometric wave calculations defined by the provided orbit settings.
         /// </summary>
-        /// <param name="key">The verified identity registry key of the audio asset.</param>
-        /// <param name="positionProvider">A functional delegate returning the live world coordinates of the orbit center point.</param>
-        /// <param name="validationCheck">A functional delegate assessing if the tracked context layer remains running and operationally valid.</param>
-        /// <param name="volume">The baseline scalar volume multiplier profile.</param>
-        /// <param name="minDistance">The physical distance threshold inside which attenuation processing is bypassed.</param>
-        /// <param name="maxDistance">The spatial horizon boundary beyond which volume drops to absolute zero.</param>
-        /// <param name="priority">The strict hardware allocation and eviction matrix priority tier.</param>
-        /// <param name="lifespan">The required explicit lifespan duration limit of the orbiting routine pipeline loop.</param>
-        /// <param name="targetPlayerFilter">An optional predicate filter controlling visual/auditory client perception visibility maps.</param>
-        /// <param name="maxRadius">The maximum radial boundary expansion distance for the orbit pattern.</param>
-        /// <param name="minRadius">The minimum radial contraction compression distance for the orbit pattern.</param>
-        /// <param name="angularSpeed">The velocity scalar defining spatial rotation speed around the origin matrix.</param>
-        /// <param name="approachSpeed">The frequency factor managing the radial breathing effect via harmonic wave functions.</param>
-        /// <param name="heightOffset">A static elevation adjust factor maintaining ear-level projection relative to the center vector.</param>
-        /// <returns>A unique network audio session handle identifier for tracking or runtime modification.</returns>
         int PlayOrbitingAudio(
             string key,
             Func<Vector3> positionProvider,
@@ -154,14 +145,10 @@
             float volume,
             float minDistance,
             float maxDistance,
+            OrbitSettings orbitSettings,
             AudioPriority priority = AudioPriority.Medium,
             float? lifespan = null,
-            Func<Player, bool> targetPlayerFilter = null,
-            float maxRadius = 3.2f,
-            float minRadius = 0.6f,
-            float angularSpeed = 1.1f,
-            float approachSpeed = 1.5f,
-            float heightOffset = 0.85f);
+            Func<Player, bool> targetPlayerFilter = null);
 
         /// <summary>
         /// Sets the volume for the specified session.
