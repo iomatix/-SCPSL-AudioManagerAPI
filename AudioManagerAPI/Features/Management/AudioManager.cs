@@ -405,6 +405,28 @@
         {
             Log.Debug($"[AudioManagerAPI] InitializePhysicalSpeaker: session={sessionId}, controllerId={controllerId}, hasSamples={(initialSamples != null)}");
 
+            // FIX: Explicitly intercept and destroy the old orphaned speaker holding native AudioSources before overwriting the slot
+            if (speakers.TryGetValue(controllerId, out ISpeaker oldSpeaker) && oldSpeaker != null)
+            {
+                try
+                {
+                    oldSpeaker.Stop();
+                    if (oldSpeaker is IDisposable disposableSpeaker)
+                    {
+                        disposableSpeaker.Dispose();
+                    }
+                    else if (oldSpeaker != null)
+                    {
+                        // Fallback destination if factories mount speakers directly onto standard Unity GameObjects
+                        oldSpeaker.Destroy();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error($"[AudioManagerAPI] Failed to clean native resources for orphaned controller slot {controllerId}: {ex.Message}");
+                }
+            }
+
             ISpeaker speaker = speakerFactory.CreateSpeaker(state.Position, controllerId);
             if (speaker == null)
             {
