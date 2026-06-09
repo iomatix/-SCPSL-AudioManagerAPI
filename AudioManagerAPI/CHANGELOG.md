@@ -1,5 +1,21 @@
 ﻿# SCPSL-AudioManagerAPI — Changelog
 
+## 🆕 Changelog — Version 2.3.1 — API Native Paranoia & Spatial Tracking
+
+### Core API Extensions
+- **Smart Dual-Channel Injection**: Added `PlaySpatialSmart` to `IAudioManager`. This API automatically handles the "Owner vs World" split by creating a filtered 3D session for nearby entities and a private 2D/3D isolated session for the owner, eliminating audio phasing (phasing/comb filtering) for the trigger source.
+- **Universal Orbit Engine**: Integrated `PlayOrbitingAudio` into the core API. The trigonometric vector update loop is now a first-class citizen of the engine, supporting arbitrary position providers, custom radii, and angular velocity scalars without manual plugin-side coroutine management.
+- **Predictive Trajectory Sync**: Added `PlayTrackingAudio` for frame-perfect anatomical tracking. Specifically optimized for head-level projection (1.65m offset) to lock auditory sources to player silhouettes during high-speed character movement.
+
+### Performance & Safety
+- **Lifespan Cleanup Optimization**: Enhanced `LifespanCleanupCoroutine` with an adaptive 100ms hardware warm-up buffer, ensuring 3D speaker components initialize their internal buffers before the truncation timer starts counting.
+- **Transient Debounce Gate**: Implemented a global-level transient debouncer (`isTransient`) within `PlayAudioAutoManaged`. Prevents command queue starvation and hardware controller exhaustion caused by high-frequency input spam (e.g., rapid flashlight toggling).
+- **Network Stability**: Added `ExecuteTransientNetworkFlush` mechanism—a soft-stop trigger that allows network buffers to finish outputting short audio tails (transients) before physically destroying the session, eliminating the "click/pop" cutoff sound at the end of audio samples.
+
+### API Maintenance
+- **IoC Constructor Alignment**: Updated `AudioManager` to require `AudioConfig` on instantiation. This removes the need for duplicate disk I/O reads during the bootstrap phase.
+- **Interface Evolution**: Added `SetSessionPlayerFilter` and expanded contract definitions to support dynamic runtime filter updates for active streams.
+
 ## 🆕 Changelog — Version 2.3.0 — Enterprise Stability & Synchronized Core
 
 ### Main-Thread Marshalling (Thread-Safety)

@@ -81,7 +81,7 @@ using UnityEngine;
 int structuralSessionId = DefaultAudioManager.PlayAtPosition("explosion_sound", new Vector3(10f, 4f, -15f));
 ```
 
-### 4. Local-Space Transform Tracking (NEW in 2.3.0)
+### 4. Local-Space Transform Tracking (NEW in 2.3.1)
 
 To play 3D audio that attaches to and dynamically tracks a moving target (e.g., weapon attachments, moving NPCs, or client hallucinations) relative to their sight and orientation vectors:
 
@@ -96,6 +96,30 @@ DefaultAudioManager.Instance.PlayTrackingAudio(
     audioKey: AudioKey.LightShortCircuit,
     lifespan: 0.115f,
     hearableForAllPlayers: true
+);
+```
+
+### 5 Advanced Spatial Control (NEW in 2.3.1)
+
+Smart Spatial Injection (Phasing-Free)
+If you need an audio effect that the player triggers themselves (e.g., flashlight click), use `PlaySpatialSmart`. It creates an "Area of Interest" filter for everyone else while providing an optimized isolated channel for the owner.
+
+```csharp
+// Excludes the source player from the 3D channel, 
+// and automatically manages an isolated channel for the owner.
+DefaultAudioManager.Instance.PlaySpatialSmart("key", position, sourcePlayer);
+```
+
+### 6. Trigonometric Orbiting (Paranoia Effects)
+```csharp
+// Orbits around the player for 10 seconds
+DefaultAudioManager.Instance.PlayOrbitingAudio(
+    key: "scp575.whispers_mixed",
+    positionProvider: () => player.Position,
+    validationCheck: () => player.IsAlive,
+    volume: 0.8f,
+    minDistance: 5f,
+    maxDistance: 20f
 );
 ```
 
@@ -207,6 +231,12 @@ On the first launch, the API generates `Configs/AudioConfig.json` in the server 
 ---
 
 ## 🔄 Migration Guide
+
+### Migration from V2.2.0 to V2.3.1
+
+1.Facade Method Refactoring – DefaultAudioManager.Play(...) has been removed. Use DefaultAudioManager.PlayGlobal(...) or PlayAtPosition(...).
+2. Inversion of Control (IoC) Constructor Change – AudioManager now demands a pre-validated AudioConfig instance.
+3. Interface Promotion – AudioOptions is now a mandatory contract requirement of IAudioManager.
 
 ### Migration from V1.9.x to V2.0.0
 
