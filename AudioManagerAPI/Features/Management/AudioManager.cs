@@ -189,6 +189,220 @@
             return sessionId;
         }
 
+        public (int worldSessionId, int sourceSessionId) PlaySpatialSmart(string key, Vector3 position, Player sourcePlayer, AudioPriority priority = AudioPriority.Medium, float? lifespan = null)
+        {
+            if (key == null) throw new ArgumentNullException(nameof(key));
+
+            // Public environmental channel: plays for everyone inside the Area of Interest sphere except the trigger source.
+            int worldSession = PlayAudio(
+                key: key,
+                position: position,
+                loop: false,
+                volume: 1f,
+                minDistance: 1f,
+                maxDistance: 20f,
+                isSpatial: true,
+                priority: priority,
+                validPlayersFilter: p => p != null && p.IsReady && (sourcePlayer == null || p.UserId != sourcePlayer.UserId),
+                queue: false,
+                fadeInDuration: 0f,
+                persistent: false,
+                lifespan: lifespan,
+                autoCleanup: true
+            );
+
+            // Isolated subjective channel: plays exclusively for the trigger source to preserve perfect point-source directionality.
+            int sourceSession = 0;
+            if (sourcePlayer != null && sourcePlayer.IsReady)
+            {
+                sourceSession = PlayAudio(
+                    key: key,
+                    position: position,
+                    loop: false,
+                    volume: 1f,
+                    minDistance: 1f,
+                    maxDistance: 20f,
+                    isSpatial: true,
+                    priority: priority,
+                    validPlayersFilter: p => p != null && p.UserId == sourcePlayer.UserId,
+                    queue: false,
+                    fadeInDuration: 0f,
+                    persistent: false,
+                    lifespan: lifespan,
+                    autoCleanup: true
+                );
+            }
+
+            return (worldSession, sourceSession);
+        }
+
+        public int PlayTrackingAudio(string key, Func<Vector3> positionProvider, Func<bool> validationCheck, AudioPriority priority = AudioPriority.Medium, float? lifespan = null, Func<Player, bool> targetPlayerFilter = null)
+        {
+            if (positionProvider == null || validationCheck == null || !validationCheck()) return 0;
+
+            float initialLifespan = lifespan ?? 0f;
+
+            // Instantiate the session context anchored at the first calculated frame coordinate vector.
+            int sessionId = PlayAudio(
+                key: key,
+                position: positionProvider(),
+                loop: false,
+                volume: 1f,
+                minDistance: 1f,
+                maxDistance: 20f,
+                isSpatial: true,
+                priority: priority,
+                validPlayersFilter: targetPlayerFilter,
+                queue: false,
+                fadeInDuration: 0f,
+                persistent: false,
+                lifespan: lifespan,
+                autoCleanup: true
+            );
+
+            if (sessionId == 0) return 0;
+
+            // Dispatch the high-frequency transformation update handler loop into the MEC thread pool.
+            MEC.Timing.RunCoroutine(TrackTargetTransformLoop(positionProvider, validationCheck, sessionId, initialLifespan));
+            return sessionId;
+        }
+
+        private IEnumerator<float> TrackTargetTransformLoop(Func<Vector3> positionProvider, Func<bool> validationCheck, int sessionId, float duration)
+        {
+            float elapsed = 0f;
+
+            // Allow a brief execution layout buffer frame window for underlying network identities to stabilize.
+            yield return MEC.Timing.WaitForSeconds(0.1f);
+
+            while (duration <= 0f || elapsed < duration)
+            {
+                // Enforce strict situational invariant validations before attempting state mutations.
+                if (!validationCheck() || !IsValidSession(sessionId))
+                {
+                    lock (lockObject)
+                    {
+                        try { FadeOutAudio(sessionId, Options.DefaultFadeOutDuration); } catch { }
+                    }
+                    yield break;
+                }
+
+                try
+                {
+                    SetSessionPosition(sessionId, positionProvider());
+                }
+                catch
+                {
+                    yield break;
+                }
+
+                elapsed += MEC.Timing.DeltaTime;
+                yield return MEC.Timing.WaitForOneFrame;
+            }
+        }
+
+        public int PlayOrbitingAudio(
+            string key,
+            Func<Vector3> positionProvider,
+            Func<bool> validationCheck,
+            float volume,
+            float minDistance,
+            float maxDistance,
+            AudioPriority priority = AudioPriority.Medium,
+            float? lifespan = null,
+            Func<Player, bool> targetPlayerFilter = null,
+            float maxRadius = 3.2f,
+            float minRadius = 0.6f,
+            float angularSpeed = 1.1f,
+            float approachSpeed = 1.5f,
+            float heightOffset = 0.85f)
+        {
+            if (positionProvider == null || validationCheck == null || !validationCheck()) return 0;
+
+            float initialLifespan = lifespan ?? 0f;
+            if (initialLifespan <= 0f) return 0;
+
+            // Anchor the early spatial layout state firmly to the initial coordinate yield frame.
+            int sessionId = PlayAudio(
+                key: key,
+                position: positionProvider(),
+                loop: false,
+                volume: volume,
+                minDistance: minDistance,
+                maxDistance: maxDistance,
+                isSpatial: true,
+                priority: priority,
+                validPlayersFilter: targetPlayerFilter,
+                queue: false,
+                fadeInDuration: 0f,
+                persistent: false,
+                lifespan: lifespan,
+                autoCleanup: true
+            );
+
+            if (sessionId == 0) return 0;
+
+            // Delegate raw coordinate mutations directly to the high-performance MEC thread context.
+            MEC.Timing.RunCoroutine(TrackAndOrbitPositionLoop(
+                positionProvider, validationCheck, sessionId, initialLifespan,
+                maxRadius, minRadius, angularSpeed, approachSpeed, heightOffset));
+
+            return sessionId;
+        }
+
+        private IEnumerator<float> TrackAndOrbitPositionLoop(
+            Func<Vector3> positionProvider, Func<bool> validationCheck, int sessionId, float duration,
+            float maxRadius, float minRadius, float angularSpeed, float approachSpeed, float heightOffset)
+        {
+            float elapsed = 0f;
+
+            // Randomize starting phase parameters to avoid synchronized overlapping audio tracks.
+            float currentAngle = UnityEngine.Random.Range(0f, Mathf.PI * 2f);
+            float approachPhaseOffset = UnityEngine.Random.Range(0f, Mathf.PI * 2f);
+
+            while (elapsed < duration)
+            {
+                // Enforce systemic validation rules on every frame tick to guard against memory pollution.
+                if (!validationCheck() || !IsValidSession(sessionId))
+                {
+                    lock (lockObject)
+                    {
+                        try { FadeOutAudio(sessionId, Options.DefaultFadeOutDuration); } catch { }
+                    }
+                    yield break;
+                }
+
+                Vector3 corePosition = positionProvider();
+
+                // Compute harmonic expansion and contraction factors using mapped sine wave operations.
+                float normalizedSine = (Mathf.Sin((elapsed * approachSpeed) + approachPhaseOffset) + 1f) / 2f;
+                float currentRadius = Mathf.Lerp(minRadius, maxRadius, normalizedSine);
+
+                // Derive circular positioning steps across plane dimensions.
+                float xOffset = Mathf.Cos(currentAngle) * currentRadius;
+                float zOffset = Mathf.Sin(currentAngle) * currentRadius;
+
+                Vector3 projectedVector = new Vector3(
+                    corePosition.x + xOffset,
+                    corePosition.y + heightOffset,
+                    corePosition.z + zOffset
+                );
+
+                try
+                {
+                    SetSessionPosition(sessionId, projectedVector);
+                }
+                catch
+                {
+                    yield break;
+                }
+
+                currentAngle += angularSpeed * MEC.Timing.DeltaTime;
+                elapsed += MEC.Timing.DeltaTime;
+
+                yield return MEC.Timing.WaitForOneFrame;
+            }
+        }
+
         private void InitializePhysicalSpeaker(
             byte controllerId,
             int sessionId,
@@ -232,16 +446,26 @@
                 OnPlaybackStarted?.Invoke(sessionId);
             }
 
+            // ===================================================================
+            // LIFECYCLE MECHANICS: DETERMINISTIC MICRO-TRANSIENT CLEANUP GATES
+            // ===================================================================
             if (state.AutoCleanup || state.Lifespan.HasValue)
             {
                 float targetLifespan = state.Lifespan ?? float.MaxValue;
-                float adaptiveFadeOutDuration = targetLifespan < 0.5f ? 0f : this.Options.DefaultFadeOutDuration;
 
-                speaker.StartAutoStop(
-                    controllerId,
-                    targetLifespan,
-                    state.AutoCleanup,
-                    _ => FadeOutAudio(sessionId, adaptiveFadeOutDuration));
+                if (targetLifespan < 0.5f)
+                {
+                    // For short lifespan acoustics, bypass standard loops to execute predictive network flushes.
+                    MEC.Timing.RunCoroutine(ExecuteTransientNetworkFlush(sessionId, targetLifespan));
+                }
+                else
+                {
+                    speaker.StartAutoStop(
+                        controllerId,
+                        targetLifespan,
+                        state.AutoCleanup,
+                        _ => FadeOutAudio(sessionId, this.Options.DefaultFadeOutDuration));
+                }
             }
         }
 
@@ -499,6 +723,27 @@
                 ControllerIdManager.FullReset();
 
                 Log.Info("[AudioManagerAPI] All audio sessions and physical controllers have been cleaned up.");
+            }
+        }
+        private IEnumerator<float> ExecuteTransientNetworkFlush(int sessionId, float delayHorizon)
+        {
+            yield return MEC.Timing.WaitForSeconds(delayHorizon);
+
+            lock (lockObject)
+            {
+                if (!IsValidSession(sessionId)) yield break;
+
+                // Step 1: Instantly sever the playback data pipeline to ensure silent cutoff processing.
+                FadeOutAudio(sessionId, 0f);
+            }
+
+            // Step 2: Yield the execution context for a fixed timeframe block. 
+            // This leaves a safe processing window for the hardware layer to flush outstanding UDP frames to remote clients.
+            yield return MEC.Timing.WaitForSeconds(0.250f);
+
+            lock (lockObject)
+            {
+                try { DestroySession(sessionId); } catch { }
             }
         }
 
