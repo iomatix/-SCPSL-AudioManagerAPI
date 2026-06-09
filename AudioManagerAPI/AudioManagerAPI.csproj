@@ -7,7 +7,6 @@
 		<TargetFramework>net48</TargetFramework>
 		<OutputType>Library</OutputType>
 		<RootNamespace>AudioManagerAPI</RootNamespace>
-		<AssemblyName>AudioManagerAPI</AssemblyName>
 		<DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
 		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
 		<GenerateDocumentationFile>true</GenerateDocumentationFile>
@@ -30,7 +29,12 @@
 		<PackageLicenseFile>LICENSE</PackageLicenseFile>
 		<PackageChangelogFile>CHANGELOG.md</PackageChangelogFile>
 	</PropertyGroup>
-
+	<PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+		<AssemblyName>AudioManagerAPI-DEBUG</AssemblyName>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)' != 'Debug'">
+		<AssemblyName>AudioManagerAPI</AssemblyName>
+	</PropertyGroup>
 	<ItemGroup>
 		<None Remove="LICENSE" />
 		<None Remove="README.md" />
