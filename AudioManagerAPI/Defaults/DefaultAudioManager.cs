@@ -57,12 +57,16 @@
 
         private static readonly Lazy<IAudioManager> _lazyInstance = new Lazy<IAudioManager>(() =>
         {
+            // Load and sanitize the configuration manifest exactly once from disk
             var config = AudioConfigLoader.LoadOrCreate();
+
             ISpeakerFactory factory = config.UseDefaultSpeakerFactory
-                ? new DefaultSpeakerFactory()
+                ? (ISpeakerFactory)new DefaultSpeakerFactory()
                 : StaticSpeakerFactory.Instance;
 
-            return new AudioManager(factory);
+            // INJECTION: Pass the resolved configuration reference down into the implementation core.
+            // This fully decouples the AudioManager from handling its own disk reading routines.
+            return new AudioManager(factory, config);
         }, isThreadSafe: true);
 
         /// <summary>

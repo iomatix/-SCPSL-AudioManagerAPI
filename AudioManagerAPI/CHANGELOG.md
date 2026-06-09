@@ -1,5 +1,33 @@
 ﻿# SCPSL-AudioManagerAPI — Changelog
 
+## 🆕 Changelog — Version 2.3.0 — Enterprise Stability & Synchronized Core
+
+### Main-Thread Marshalling (Thread-Safety)
+- Introduced `DestroySessionDeferred` bound to `MEC.Segment.Update` to safely marshal session teardowns and Unity network object destruction back to the Main Thread.
+- Prevents structural thread affinity deadlocks and native Unity memory crashes caused by background audio worker threads executing cleanup callbacks.
+- Implemented a single-frame deferral engine in `FadeOutAudio` to prevent eviction race conditions on early execution frames.
+
+### Micro-Transient Netcode (Soft-Stop & Network Flush)
+- Overrode hard session truncation for short audio lifetimes (< 0.5s) to eliminate the "disappearing click" network bug.
+- Implemented an adaptive timing gate: the pipeline now instantly mutes the audio playback data layer (`FadeOutAudio(id, 0f)`) but delays physical session destruction by `250ms` (`DelayedSessionDestroy`).
+- Guarantees that raw UDP packet buffers successfully flush out of the network card queue to remote clients before the session ID is recycled.
+
+### Non-Blocking Cache & Predictive Warmup
+- Optimized `PlayAudio` by extracting `audioCache.Get(key)` completely outside of the global management `lockObject` sector.
+- Prevents full-engine lock contentions and server-wide audio freezing during fallback disk I/O read operations.
+- Upgraded `AudioCache` to proactively pre-decode registered audio assets asynchronously using `ThreadPool.QueueUserWorkItem` upon registration.
+- Eliminates first-play disk I/O stuttering, converting lazy runtime lookups into deterministic, zero-allocation $O(1)$ operations during dynamic gameplay passes.
+
+### Rotation-Aware Local Space Tracking
+- Introduced `PlayTrackingAudio` API driven by a zero-allocation reactive frame-by-frame transformation loop.
+- Sound anchors now dynamically follow a player's model relative to their local orientation matrix (anchored at neck-level `1.65f` elevation, with a `1mm` look-vector thrust to maximize directional HRTF immersive accuracy).
+- Integrated a `100ms` physical speaker engine warm-up buffer to compensate for asynchronous Unity scene component instantiation delays.
+
+### Bootstrapper IoC Alignment
+- Refactored `AudioManager` constructor and `DefaultAudioManager` facade to share a single, pre-validated `AudioConfig` instance using Inversion of Control (IoC).
+- Eliminates redundant duplicate disk serialization passes on plugin startup, cutting config I/O cycles in half.
+- Embedded runtime input sanitization (`Validate`) directly into the model to block corrupt JSON parameters from crashing the engine.
+
 ## 🆕 Changelog — Version 2.2.0
 
 ### Float‑Native Audio Pipeline

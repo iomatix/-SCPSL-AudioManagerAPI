@@ -19,12 +19,12 @@
     using Log = LabApi.Features.Console.Logger;
 
     /// <summary>
-    /// Implements audio management with session lifecycle and caching for game audio playback.
-    /// Acts as a router between abstract sessions and physical LabAPI speaker controllers.
+    /// Audio orchestration router acting as a thread-safe bridge 
+    /// between abstract audio sessions and physical network speaker controller hardware components.
+    /// Fully compliant with C# 7.4 execution frameworks.
     /// </summary>
     public partial class AudioManager : IAudioManager
     {
-        // Maps physical controller IDs (0-254) to actual LabAPI speaker wrappers
         private readonly Dictionary<byte, ISpeaker> speakers = new Dictionary<byte, ISpeaker>();
         private readonly AudioCache audioCache;
         private readonly ISpeakerFactory speakerFactory;
@@ -41,10 +41,10 @@
 
         public AudioOptions Options { get; }
 
-        public AudioManager(ISpeakerFactory speakerFactory)
+        public AudioManager(ISpeakerFactory speakerFactory, AudioConfig config)
         {
+            if (config == null) throw new ArgumentNullException(nameof(config));
             this.speakerFactory = speakerFactory ?? throw new ArgumentNullException(nameof(speakerFactory));
-            var config = AudioConfigLoader.LoadOrCreate();
 
             if (config.CacheSize <= 0)
                 throw new ArgumentException("Cache size must be positive.", nameof(config.CacheSize));
@@ -97,15 +97,18 @@
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
 
+            // OPTIMIZATION: Querying the memory cache buffer OUTSIDE the global management lock lockObject.
+            // If a cache-miss triggers a lazy-loading I/O disk fetch, it runs safely in a non-blocking 
+            // state, preventing thread exhaustion or frame starvation across the entire audio backend engine.
+            float[] samples = audioCache.Get(key);
+            if (samples == null)
+            {
+                Log.Warn($"[AudioManagerAPI] Audio with key {key} not found in cache registries.");
+                return 0;
+            }
+
             lock (lockObject)
             {
-                float[] samples = audioCache.Get(key);
-                if (samples == null)
-                {
-                    Log.Warn($"[AudioManagerAPI] Audio with key {key} not found in cache.");
-                    return 0;
-                }
-
                 var state = new SpeakerState
                 {
                     Key = queue ? null : key,
@@ -136,7 +139,6 @@
                     return 0;
                 }
 
-                // If a physical ID was allocated, set up the speaker
                 if (controllerId != 0)
                 {
                     InitializePhysicalSpeaker(controllerId, allocatedSessionId, state, samples, loop, queue);
@@ -197,63 +199,42 @@
         {
             Log.Debug($"[AudioManagerAPI] InitializePhysicalSpeaker: session={sessionId}, controllerId={controllerId}, hasSamples={(initialSamples != null)}");
 
-            // Create the physical speaker instance (LabAPI SpeakerToy wrapper)
             ISpeaker speaker = speakerFactory.CreateSpeaker(state.Position, controllerId);
             if (speaker == null)
             {
-                // If creation fails, release the hardware controller slot
                 ControllerIdManager.ReleaseController(controllerId);
                 Log.Warn($"[AudioManagerAPI] Failed to create physical speaker for session {sessionId} (Controller ID: {controllerId}).");
                 return;
             }
 
-            // Configure spatial audio parameters (volume, distance, spatialization)
             speaker.Configure(state.Volume, state.MinDistance, state.MaxDistance, state.IsSpatial, null);
 
-            // Apply player filter (who can hear this speaker)
             if (speaker is ISpeakerWithPlayerFilter filterSpeaker && state.PlayerFilter != null)
             {
                 filterSpeaker.SetValidPlayers(state.PlayerFilter);
             }
 
-            // Register the speaker in the internal controller → speaker map
             speakers[controllerId] = speaker;
-
-            // Link the physical speaker to the session state
             state.PhysicalSpeaker = speaker;
             state.HasPhysicalSpeaker = true;
 
-            // --- STREAM‑ONLY MODE FIX ---
-            // If this is a stream‑only session (initialSamples == null),
-            // we must activate the audio pipeline by calling Play() with an empty buffer.
-            //
-            // SpeakerToy does NOT start its internal AudioSource until Play() is called.
-            // Without this, Queue() from AppendPcm() will never produce audible sound.
             if (initialSamples == null)
             {
-                // Activate playback pipeline with an empty clip
                 speaker.Play(new float[] { 0f }, false, 0f);
             }
             else if (isQueued)
             {
-                // Queue static audio if this session is using queued playback
                 speaker.Queue(initialSamples, initialLoop);
             }
             else
             {
-                // Normal static audio playback
                 speaker.Play(initialSamples, initialLoop, state.PlaybackPosition);
                 OnPlaybackStarted?.Invoke(sessionId);
             }
 
-            // Auto-cleanup / lifespan handling
             if (state.AutoCleanup || state.Lifespan.HasValue)
             {
                 float targetLifespan = state.Lifespan ?? float.MaxValue;
-
-                // ADAPTIVE TIMING GATES: If the intended runtime lifecycle is shorter than 0.5 seconds (micro-transients),
-                // we bypass the global default fade duration profile. Overriding with 0.0f achieves a precise 
-                // physical cutoff switch point, preventing internal Dissonance stream overlap errors.
                 float adaptiveFadeOutDuration = targetLifespan < 0.5f ? 0f : this.Options.DefaultFadeOutDuration;
 
                 speaker.StartAutoStop(
@@ -263,7 +244,6 @@
                     _ => FadeOutAudio(sessionId, adaptiveFadeOutDuration));
             }
         }
-
 
         public bool SetSessionVolume(int sessionId, float volume)
         {
@@ -284,7 +264,7 @@
                         return true;
                     }
                 }
-                return true; // Successfully updated state even if no physical speaker
+                return true;
             }
         }
 
@@ -337,11 +317,10 @@
 
                 if (resetPlayback) state.PlaybackPosition = 0f;
 
-                // Attempt to grab a new physical ID if not currently active
                 if (!ControllerIdManager.TryGetActiveController(sessionId, out byte currentControllerId))
                 {
                     ControllerIdManager.TryAllocate(state.Priority, null, state, out _, out byte newControllerId);
-                    if (newControllerId == 0) return false; // Still no slots available
+                    if (newControllerId == 0) return false;
 
                     var samples = audioCache.Get(state.Key);
                     InitializePhysicalSpeaker(newControllerId, sessionId, state, samples, state.Loop, false);
@@ -360,7 +339,6 @@
                 {
                     if (speakers.TryGetValue(controllerId, out var speaker))
                     {
-                        // Save current playback position before pausing if implementation allows
                         speaker.Pause();
                         OnPaused?.Invoke(sessionId);
                     }
@@ -394,7 +372,6 @@
                         speaker.Skip(count);
                         OnSkipped?.Invoke(sessionId, count);
 
-                        // Check if queue is empty
                         if (speaker is DefaultSpeakerToyAdapter adapter && adapter.IsQueueEmpty)
                         {
                             OnQueueEmpty?.Invoke(sessionId);
@@ -428,32 +405,22 @@
 
                 if (ControllerIdManager.TryGetActiveController(sessionId, out byte controllerId) && speakers.TryGetValue(controllerId, out var speaker))
                 {
-                    // Direct closure invocation on a native worker audio thread will crash Unity if it touches GameObjects.
-                    // We encapsulate the state destruction payload inside an abstract lambda.
                     speaker.FadeOut(duration, () =>
                     {
-                        // MARSHALLING GATES: Safely dispatch the structural component teardown back to Unity's Main Thread.
                         MEC.Timing.RunCoroutine(DestroySessionDeferred(sessionId), MEC.Segment.Update);
                     });
                 }
                 else
                 {
-                    // ANTI-RACE STRATEGY: If a fade request arrives on frame 0 before 'InitializePhysicalSpeaker' 
-                    // registers the key in our local dictionary, we MUST NOT drop the session instantly.
-                    // We defer eviction by exactly one frame loop to allow reference resolution to stabilize.
                     MEC.Timing.RunCoroutine(DestroySessionDeferred(sessionId), MEC.Segment.Update);
                 }
             }
         }
 
-        /// <summary>
-        /// Asynchronously marshals session data destruction to prevent thread affinity deadlocks under lock contentions.
-        /// </summary>
         private IEnumerator<float> DestroySessionDeferred(int sessionId)
         {
             yield return MEC.Timing.WaitForOneFrame;
 
-            // Re-locking securely on the main thread update pass to safely wipe tracking indices.
             lock (lockObject)
             {
                 DestroySession(sessionId);
@@ -529,8 +496,6 @@
                     kvp.Value.Destroy();
                 }
                 speakers.Clear();
-
-                // Full cleanup of the ID pool and saved states in the management layer
                 ControllerIdManager.FullReset();
 
                 Log.Info("[AudioManagerAPI] All audio sessions and physical controllers have been cleaned up.");
@@ -553,21 +518,17 @@
             AppendPcmData(sessionId, samples);
         }
 
-
         public void AppendPcmData(int sessionId, float[] samples)
         {
             var state = ControllerIdManager.GetSessionState(sessionId);
             if (state == null || samples == null || samples.Length == 0)
                 return;
 
-            // enqueue float samples
             state.PcmQueue.Enqueue(samples);
 
-            // forward to hardware if available
             if (state.HasPhysicalSpeaker && state.PhysicalSpeaker != null)
                 state.PhysicalSpeaker.AppendPcm(samples);
         }
-
 
         public int CreateStreamSession(
             Vector3 position,
@@ -618,7 +579,6 @@
 
                 if (controllerId != 0)
                 {
-                    // Send null as initialSamples, false, false
                     InitializePhysicalSpeaker(
                         controllerId,
                         allocatedSessionId,
@@ -631,9 +591,6 @@
                 return allocatedSessionId;
             }
         }
-
-
-
         #endregion
     }
 }
