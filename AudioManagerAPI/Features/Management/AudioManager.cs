@@ -26,7 +26,8 @@
     /// </summary>
     public partial class AudioManager : IAudioManager
     {
-        private readonly Dictionary<byte, ISpeaker> speakers = new Dictionary<byte, ISpeaker>();
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<byte, ISpeaker> speakers =
+            new System.Collections.Concurrent.ConcurrentDictionary<byte, ISpeaker>();
         private readonly AudioCache audioCache;
         private readonly ISpeakerFactory speakerFactory;
         private readonly object lockObject = new object();
@@ -711,11 +712,10 @@
             {
                 if (ControllerIdManager.TryGetActiveController(sessionId, out byte controllerId))
                 {
-                    if (speakers.TryGetValue(controllerId, out var speaker))
+                    if (speakers.TryRemove(controllerId, out var speaker) && speaker != null)
                     {
                         speaker.Stop();
                         speaker.Destroy();
-                        speakers.Remove(controllerId);
                     }
                 }
 
@@ -783,7 +783,9 @@
             if (state == null || samples == null || samples.Length == 0)
                 return;
 
-            state.PcmQueue.Enqueue(samples);
+            if (!state.IsStreamOnly)
+                state.PcmQueue.Enqueue(samples);
+            
 
             if (state.HasPhysicalSpeaker && state.PhysicalSpeaker != null)
                 state.PhysicalSpeaker.AppendPcm(samples);
@@ -801,9 +803,13 @@
             float? lifespan = null,
             bool autoCleanup = false)
         {
+            int allocatedSessionId = 0;
+            byte controllerId = 0;
+            SpeakerState state = null;
+
             lock (lockObject)
             {
-                var state = new SpeakerState
+                state = new SpeakerState
                 {
                     Key = null,
                     Position = position,
@@ -823,33 +829,33 @@
                     IsStreamOnly = true
                 };
 
-                int allocatedSessionId = 0;
                 Action stopCallback = () =>
                 {
                     if (allocatedSessionId != 0)
                         FadeOutAudio(allocatedSessionId, this.Options.DefaultFadeOutDuration);
                 };
 
-                if (!ControllerIdManager.TryAllocate(priority, stopCallback, state, out allocatedSessionId, out byte controllerId))
+                if (!ControllerIdManager.TryAllocate(priority, stopCallback, state, out allocatedSessionId, out controllerId))
                 {
                     Log.Warn("[AudioManagerAPI] Failed to initialize stream-only session.");
                     return 0;
                 }
-
-                if (controllerId != 0)
-                {
-                    InitializePhysicalSpeaker(
-                        controllerId,
-                        allocatedSessionId,
-                        state,
-                        initialSamples: null,
-                        initialLoop: false,
-                        isQueued: false);
-                }
-
-                return allocatedSessionId;
             }
+
+            if (controllerId != 0 && state != null)
+            {
+                InitializePhysicalSpeaker(
+                    controllerId,
+                    allocatedSessionId,
+                    state,
+                    initialSamples: null,
+                    initialLoop: false,
+                    isQueued: false);
+            }
+
+            return allocatedSessionId;
         }
+
         #endregion
     }
 }
