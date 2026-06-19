@@ -1,6 +1,6 @@
 ﻿# SCPSL-AudioManagerAPI — Changelog
 
-## 🆕 Changelog — Version 2.3.1-2.3.4 — API Native Paranoia & Spatial Tracking
+## 🆕 Changelog — Version 2.3.1-2.3.5 — API Native Paranoia & Spatial Tracking
 
 ### Core API Extensions
 - **Smart Dual-Channel Injection**: Added `PlaySpatialSmart` to `IAudioManager`. This API automatically handles the "Owner vs World" split by creating a filtered 3D session for nearby entities and a private 2D/3D isolated session for the owner, eliminating audio phasing (phasing/comb filtering) for the trigger source.

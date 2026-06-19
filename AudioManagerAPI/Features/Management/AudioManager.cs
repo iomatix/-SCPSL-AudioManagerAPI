@@ -406,36 +406,48 @@
         {
             Log.Debug($"[AudioManagerAPI] InitializePhysicalSpeaker: session={sessionId}, controllerId={controllerId}, hasSamples={(initialSamples != null)}");
 
-            // FIX: Explicitly intercept and destroy the old orphaned speaker holding native AudioSources before overwriting the slot
-            if (speakers.TryGetValue(controllerId, out ISpeaker oldSpeaker) && oldSpeaker != null)
-            {
-                try
-                {
-                    oldSpeaker.Stop();
-                    if (oldSpeaker is IDisposable disposableSpeaker)
-                    {
-                        disposableSpeaker.Dispose();
-                    }
-                    else if (oldSpeaker != null)
-                    {
-                        // Fallback destination if factories mount speakers directly onto standard Unity GameObjects
-                        oldSpeaker.Destroy();
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Log.Error($"[AudioManagerAPI] Failed to clean native resources for orphaned controller slot {controllerId}: {ex.Message}");
-                }
-            }
-
+            // STEP 1: Instantiate the physical speaker components (heavy Unity factory allocation) 
+            // OUTSIDE the lock block to maintain high performance and prevent thread starvation.
             ISpeaker speaker = speakerFactory.CreateSpeaker(state.Position, controllerId);
             if (speaker == null)
             {
-                ControllerIdManager.ReleaseController(controllerId);
+                lock (lockObject)
+                {
+                    ControllerIdManager.ReleaseController(controllerId);
+                }
                 Log.Warn($"[AudioManagerAPI] Failed to create physical speaker for session {sessionId} (Controller ID: {controllerId}).");
                 return;
             }
 
+            // STEP 2: Perform structural slot evaluations and old instance teardowns INSIDE the atomic lock.
+            // This fully eliminates the risk of creating orphaned background AudioSource memory leaks.
+            lock (lockObject)
+            {
+                if (speakers.TryGetValue(controllerId, out ISpeaker oldSpeaker) && oldSpeaker != null)
+                {
+                    try
+                    {
+                        oldSpeaker.Stop();
+                        if (oldSpeaker is IDisposable disposableSpeaker)
+                        {
+                            disposableSpeaker.Dispose();
+                        }
+                        else
+                        {
+                            oldSpeaker.Destroy();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error($"[AudioManagerAPI] Failed to clean native resources for orphaned controller slot {controllerId}: {ex.Message}");
+                    }
+                }
+
+                // Secure the slot exclusively for the newly compiled speaker instance
+                speakers[controllerId] = speaker;
+            }
+
+            // STEP 3: Complete remaining data configurations safely outside the lock block
             speaker.Configure(state.Volume, state.MinDistance, state.MaxDistance, state.IsSpatial, null);
 
             if (speaker is ISpeakerWithPlayerFilter filterSpeaker && state.PlayerFilter != null)
@@ -443,7 +455,6 @@
                 filterSpeaker.SetValidPlayers(state.PlayerFilter);
             }
 
-            speakers[controllerId] = speaker;
             state.PhysicalSpeaker = speaker;
             state.HasPhysicalSpeaker = true;
 
@@ -470,7 +481,6 @@
 
                 if (targetLifespan < 0.5f)
                 {
-                    // For short lifespan acoustics, bypass standard loops to execute predictive network flushes.
                     MEC.Timing.RunCoroutine(ExecuteTransientNetworkFlush(sessionId, targetLifespan));
                 }
                 else
