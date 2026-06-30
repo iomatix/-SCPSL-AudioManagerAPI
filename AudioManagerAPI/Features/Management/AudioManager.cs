@@ -425,28 +425,15 @@
             {
                 if (speakers.TryGetValue(controllerId, out ISpeaker oldSpeaker) && oldSpeaker != null)
                 {
-                    try
-                    {
-                        oldSpeaker.Stop();
-                        if (oldSpeaker is IDisposable disposableSpeaker)
-                        {
-                            disposableSpeaker.Dispose();
-                        }
-                        else
-                        {
-                            oldSpeaker.Destroy();
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Error($"[AudioManagerAPI] Failed to clean native resources for orphaned controller slot {controllerId}: {ex.Message}");
-                    }
+                    float crossfadeDuration = this.Options.DefaultFadeOutDuration > 0f
+                        ? this.Options.DefaultFadeOutDuration
+                        : 0.15f;
+
+                    MEC.Timing.RunCoroutine(FadeOutAndDestroyOldSpeaker(oldSpeaker, crossfadeDuration));
                 }
 
-                // Secure the slot exclusively for the newly compiled speaker instance
                 speakers[controllerId] = speaker;
             }
-
             // STEP 3: Complete remaining data configurations safely outside the lock block
             speaker.Configure(state.Volume, state.MinDistance, state.MaxDistance, state.IsSpatial, null);
 
@@ -720,12 +707,18 @@
         {
             lock (lockObject)
             {
+                var state = GetSessionState(sessionId);
+
                 if (ControllerIdManager.TryGetActiveController(sessionId, out byte controllerId))
                 {
-                    if (speakers.TryRemove(controllerId, out var speaker) && speaker != null)
+                    if (speakers.TryGetValue(controllerId, out var speaker) && speaker != null)
                     {
-                        speaker.Stop();
-                        speaker.Destroy();
+                        if (state != null && speaker == state.PhysicalSpeaker)
+                        {
+                            speakers.TryRemove(controllerId, out _);
+                            speaker.Stop();
+                            speaker.Destroy();
+                        }
                     }
                 }
 
@@ -795,7 +788,7 @@
 
             if (!state.IsStreamOnly)
                 state.PcmQueue.Enqueue(samples);
-            
+
 
             if (state.HasPhysicalSpeaker && state.PhysicalSpeaker != null)
                 state.PhysicalSpeaker.AppendPcm(samples);
@@ -864,6 +857,56 @@
             }
 
             return allocatedSessionId;
+        }
+
+        #endregion
+
+        #region helpers
+
+        private IEnumerator<float> FadeOutAndDestroyOldSpeaker(ISpeaker oldSpeaker, float duration)
+        {
+            if (oldSpeaker == null) yield break;
+
+            bool isCompleted = false;
+
+            try
+            {
+                oldSpeaker.FadeOut(duration, () =>
+                {
+                    isCompleted = true;
+                });
+            }
+            catch (Exception ex)
+            {
+                Log.Error("[AudioManagerAPI] Failed to initiate crossfade fadeout: " + ex.Message);
+                isCompleted = true;
+            }
+
+            float elapsed = 0f;
+            float safetyTimeout = duration + 0.2f;
+
+            while (!isCompleted && elapsed < safetyTimeout)
+            {
+                elapsed += MEC.Timing.DeltaTime;
+                yield return MEC.Timing.WaitForOneFrame;
+            }
+
+            try
+            {
+                oldSpeaker.Stop();
+                if (oldSpeaker is IDisposable disposable)
+                {
+                    disposable.Dispose();
+                }
+                else
+                {
+                    oldSpeaker.Destroy();
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error("[AudioManagerAPI] Error during deferred crossfade resource cleanup: " + ex.Message);
+            }
         }
 
         #endregion

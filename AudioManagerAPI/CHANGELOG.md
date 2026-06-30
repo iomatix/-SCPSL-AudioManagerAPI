@@ -1,6 +1,6 @@
 ﻿# SCPSL-AudioManagerAPI — Changelog
 
-## 🆕 Changelog — Version 2.3.1-2.3.5 — API Native Paranoia & Spatial Tracking
+## 🆕 Changelog — Version 2.3.1-2.3.6 — API Native Paranoia & Spatial Tracking
 
 ### Core API Extensions
 - **Smart Dual-Channel Injection**: Added `PlaySpatialSmart` to `IAudioManager`. This API automatically handles the "Owner vs World" split by creating a filtered 3D session for nearby entities and a private 2D/3D isolated session for the owner, eliminating audio phasing (phasing/comb filtering) for the trigger source.
@@ -15,6 +15,7 @@
 ### API Maintenance
 - **IoC Constructor Alignment**: Updated `AudioManager` to require `AudioConfig` on instantiation. This removes the need for duplicate disk I/O reads during the bootstrap phase.
 - **Interface Evolution**: Added `SetSessionPlayerFilter` and expanded contract definitions to support dynamic runtime filter updates for active streams.
+- **Dynamic Crossfade & Session Guard**: Introduced an asynchronous background fade-out routine for reallocated controller slots to guarantee artifact-free audio transitions. Additionally, patched a critical race condition in `DestroySession` via strict instance-matching against `state.PhysicalSpeaker`, preventing recycled session timeouts from prematurely truncating newly spawned streams.
 
 ## 🆕 Changelog — Version 2.3.0 — Enterprise Stability & Synchronized Core
 
