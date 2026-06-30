@@ -283,7 +283,8 @@
                 {
                     lock (lockObject)
                     {
-                        try { FadeOutAudio(sessionId, Options.DefaultFadeOutDuration); } catch { }
+                        float failDuration = Options.DefaultFadeOutDuration > 0f ? Options.DefaultFadeOutDuration : 0.3f;
+                        try { FadeOutAudio(sessionId, failDuration); } catch { }
                     }
                     yield break;
                 }
@@ -360,7 +361,8 @@
                 {
                     lock (lockObject)
                     {
-                        try { FadeOutAudio(sessionId, Options.DefaultFadeOutDuration); } catch { }
+                        float failDuration = Options.DefaultFadeOutDuration > 0f ? Options.DefaultFadeOutDuration : 0.65f;
+                        try { FadeOutAudio(sessionId, failDuration); } catch { }
                     }
                     yield break;
                 }
@@ -427,7 +429,7 @@
                 {
                     float crossfadeDuration = this.Options.DefaultFadeOutDuration > 0f
                         ? this.Options.DefaultFadeOutDuration
-                        : 0.15f;
+                        : 0.65f;
 
                     MEC.Timing.RunCoroutine(FadeOutAndDestroyOldSpeaker(oldSpeaker, crossfadeDuration));
                 }
