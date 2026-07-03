@@ -7,7 +7,7 @@ def generate_markdown_docs(source_dir, output_file):
     and generates a clean Markdown API registry without regex backtracking anomalies.
     Fully supports multi-line parameter lists, generic type structures, and multi-line expression bodies.
     """
-    markdown_content = "# LabApi.Extensions - Architecture API Registry\n\n"
+    markdown_content = "# Audio Manager API - Architecture API Registry\n\n"
     print("Initializing source code scanning architecture...")
 
     # Strict directory exclusion matrix to optimize execution speed and skip build artifacts

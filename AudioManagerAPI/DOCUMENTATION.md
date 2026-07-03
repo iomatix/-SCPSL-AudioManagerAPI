@@ -1,4 +1,4 @@
-# LabApi.Extensions - Architecture API Registry
+# Audio Manager API - Architecture API Registry
 
 ## 📦 Class: AudioCache
 
