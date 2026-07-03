@@ -5,6 +5,7 @@ A lightweight, reusable C# library for managing audio playback in SCP: Secret La
 
 
 > ⚠️ **Important:** [See README](AudioManagerAPI/README.md)
+> [See DOCUMENTATION](AudioManagerAPI/DOCUMENTATION.md)
 
 ## Contributions
 
