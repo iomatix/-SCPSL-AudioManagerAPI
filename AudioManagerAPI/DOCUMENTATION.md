@@ -84,6 +84,12 @@ public static void FullReset()
 
 ## 📦 Class: Mp3Decoder
 
+### 🔹 `DecodeMp3ToPcm16()`
+**Description:** Decodes a raw binary byte array containing MP3 audio streams into a 16-bit linear PCM signed short array utilizing the native Windows Audio Compression Manager (ACM).
+```csharp
+public static short[] DecodeMp3ToPcm16(byte[] mp3Bytes)
+```
+
 ---
 
 ## 📦 Class: DefaultAudioManager

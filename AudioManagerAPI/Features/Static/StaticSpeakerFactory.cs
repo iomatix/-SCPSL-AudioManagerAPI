@@ -16,10 +16,14 @@
         private static readonly DefaultSpeakerFactory factory = new DefaultSpeakerFactory();
 
         /// <summary>
-        /// Gets the shared <see cref="ISpeakerFactory"/> instance used by the API.
+        /// Retrieves the shared <see cref="ISpeakerFactory"/> instance used natively by the API.
         /// Exposed strictly for initializing the router (<see cref="AudioManagerAPI.Features.Management.AudioManager"/>) 
         /// or dependency injection. Plugins must never cast or use this to manually create/destroy physical speakers.
         /// </summary>
-        public static ISpeakerFactory Instance => factory;
+        /// <returns>The shared global <see cref="ISpeakerFactory"/> instance wrapper layer.</returns>
+        public static ISpeakerFactory GetInstance()
+        {
+            return factory;
+        }
     }
 }

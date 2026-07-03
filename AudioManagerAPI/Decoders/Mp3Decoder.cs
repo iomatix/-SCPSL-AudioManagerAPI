@@ -12,6 +12,11 @@
         // Minimal MPEG1 Layer III decoder using built-in ACM (Windows)
         // This avoids external libraries and works on all SCP:SL servers.
 
+        /// <summary>
+        /// Decodes a raw binary byte array containing MP3 audio streams into a 16-bit linear PCM signed short array utilizing the native Windows Audio Compression Manager (ACM).
+        /// </summary>
+        /// <param name="mp3Bytes">The raw compressed binary data stream representing the source MPEG-1 Layer III audio asset.</param>
+        /// <returns>A strongly-typed array of 16-bit signed integers (PCM16 audio samples) if the streaming transaction succeeds; otherwise, <c>null</c>.</returns>
         public static short[] DecodeMp3ToPcm16(byte[] mp3Bytes)
         {
             using (var mp3Stream = new MemoryStream(mp3Bytes))
