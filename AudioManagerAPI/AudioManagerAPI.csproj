@@ -115,4 +115,9 @@
 			<HintPath>$(SCPSL_MANAGED)\System.Xml.dll</HintPath>
 		</Reference>
 	</ItemGroup>
+
+	<Target Name="AutoGenerateMarkdownDocs" AfterTargets="Build">
+		<Message Importance="high" Text="[Automation] Launching API registry documentation generation stream..." />
+		<Exec Command="python generate_docs.py" WorkingDirectory="$(ProjectDir)" ContinueOnError="true" />
+	</Target>
 </Project>
