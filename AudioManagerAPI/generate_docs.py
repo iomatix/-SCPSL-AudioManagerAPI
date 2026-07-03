@@ -5,7 +5,7 @@ def generate_markdown_docs(source_dir, output_file):
     """
     Parses C# source files line-by-line to safely extract XML documentation summaries 
     and generates a clean Markdown API registry without regex backtracking anomalies.
-    Fully supports multi-line parameter lists, generic type structures, and multi-line expression bodies.
+    Fully supports multi-line parameter lists, generic type structures, properties, fields, and tuples.
     """
     markdown_content = "# Audio Manager API - Architecture API Registry\n\n"
     print("Initializing source code scanning architecture...")
@@ -70,9 +70,9 @@ def generate_markdown_docs(source_dir, output_file):
                         idx += 1
                         continue
 
-                    # 3. Process valid method definitions and bind accumulated summaries
+                    # 3. Process valid member definitions (Methods, Properties, Fields) and bind summaries
                     if summary_lines and current_class:
-                        if ("public" in stripped or "internal" in stripped) and "(" in stripped:
+                        if stripped.startswith("public ") or stripped.startswith("internal "):
                             full_signature = stripped
                             next_idx = idx + 1
                             
@@ -81,15 +81,14 @@ def generate_markdown_docs(source_dir, output_file):
                             while next_idx < len(lines):
                                 sig_stripped = full_signature.strip()
                                 
-                                # Case A: If it's an expression-bodied member, it must end with a semicolon
+                                # Terminate accumulation if a structural language boundary is hit
                                 if "=>" in sig_stripped:
                                     if sig_stripped.endswith(";"):
                                         break
-                                # Case B: Standard methods end when hitting the block opener '{' or semicolon ';'
                                 else:
                                     if "{" in sig_stripped or ";" in sig_stripped:
                                         break
-                                
+                                        
                                 next_stripped = lines[next_idx].strip()
                                 if next_stripped:
                                     full_signature += " " + next_stripped
@@ -101,15 +100,34 @@ def generate_markdown_docs(source_dir, output_file):
                             raw_summary = " ".join(summary_lines).strip()
                             method_decl_clean = re.sub(r'\s+', ' ', full_signature).strip()
                             
-                            # Safely extract the method name token, fully supporting generic layouts <T>
-                            name_match = re.search(r'(\w+)\s*(?:<[\w,\s]+>)?\s*\(', method_decl_clean)
-                            actual_method_name = name_match.group(1) if name_match else "UnknownMethod"
+                            # Determine member token type based on the first structural character encountered
+                            first_char = None
+                            first_pos = len(method_decl_clean)
+                            for char in ['(', '{', ';', '=>']:
+                                pos = method_decl_clean.find(char)
+                                if pos != -1 and pos < first_pos:
+                                    first_pos = pos
+                                    first_char = char
+
+                            is_method = (first_char == '(')
+
+                            # Cut off code at the first structural boundary to isolate type and identifier name safely
+                            declaration_core = method_decl_clean[:first_pos].strip()
+
+                            # Extract the member identifier name, handling potential trailing generic method blocks <T>
+                            name_match = re.search(r'(\b\w+)\s*(?:<[^>]+>)?$', declaration_core)
+                            actual_member_name = name_match.group(1) if name_match else "UnknownMember"
 
                             # Sanitize trailing syntax artifacts for clean markdown display
                             if method_decl_clean.endswith("{"):
                                 method_decl_clean = method_decl_clean[:-1].strip()
 
-                            markdown_content += f"### 🔹 `{actual_method_name}()`\n"
+                            # Render the Markdown document node based on explicit structural type rules
+                            if is_method:
+                                markdown_content += f"### 🔹 `{actual_member_name}()`\n"
+                            else:
+                                markdown_content += f"### 🔹 `{actual_member_name}`\n"
+
                             markdown_content += f"**Description:** {raw_summary}\n"
                             markdown_content += f"```csharp\n{method_decl_clean}\n```\n\n"
                         

@@ -94,6 +94,12 @@ public static short[] DecodeMp3ToPcm16(byte[] mp3Bytes)
 
 ## 📦 Class: DefaultAudioManager
 
+### 🔹 `Instance`
+**Description:** Singleton AudioManager instance initialized lazily on first access using configuration settings from AudioConfig.json.
+```csharp
+public static IAudioManager Instance => _lazyInstance.Value;
+```
+
 ### 🔹 `RegisterAudio()`
 **Description:** Registers an audio stream provider for a given key.
 ```csharp
@@ -174,16 +180,34 @@ public void ClearSpeakers()
 
 ## 📦 Class: DefaultSpeakerToyAdapter
 
-### 🔹 `GetTransmitter()`
+### 🔹 `QueueEmpty`
+**Description:** Occurs when the speaker's audio queue becomes empty.
+```csharp
+public event Action QueueEmpty;
+```
+
+### 🔹 `IsValid`
+**Description:** Gets a value indicating whether the underlying LabAPI SpeakerToy instance is valid and operational.
+```csharp
+public bool IsValid => speakerToy?.Base != null;
+```
+
+### 🔹 `IsQueueEmpty`
 **Description:** Gets a value indicating whether the speaker's audio queue is currently empty. Safely evaluates to true if the underlying transmitter does not exist. <value> <c>true</c> if there are no queued audio clips or no transmitter; otherwise, <c>false</c>. </value>
 ```csharp
 public bool IsQueueEmpty => (SpeakerToy.GetTransmitter(speakerToy.ControllerId)?.AudioClipSamples.Count ?? 0) == 0;
 ```
 
-### 🔹 `GetTransmitter()`
+### 🔹 `QueuedClipsCount`
 **Description:** Gets the number of audio clips currently queued for playback. <value> An integer representing the number of queued clips. Returns 0 if no transmitter is found. </value>
 ```csharp
 public int QueuedClipsCount => SpeakerToy.GetTransmitter(speakerToy.ControllerId)?.AudioClipSamples.Count ?? 0;
+```
+
+### 🔹 `ValidPlayers`
+**Description:** Gets or sets the player filter used to determine which players can hear audio from this speaker. <value> A delegate that returns <c>true</c> for valid players who should receive audio playback. </value> <remarks> This property is typically used to restrict playback to a subset of players. For example, only players in a certain room or team. </remarks>
+```csharp
+public Func<Player, bool> ValidPlayers
 ```
 
 ### 🔹 `DefaultSpeakerToyAdapter()`
@@ -360,6 +384,30 @@ public static Func<Player, bool> IsInRoom(RoomName roomType)
 
 ## 📦 Class: AudioOptions
 
+### 🔹 `CacheSize`
+**Description:** Gets the maximum number of audio clips stored in the LRU cache.
+```csharp
+public int CacheSize { get; internal set; }
+```
+
+### 🔹 `UseDefaultSpeakerFactory`
+**Description:** Gets a value indicating whether the built-in default speaker factory is being used.
+```csharp
+public bool UseDefaultSpeakerFactory { get; internal set; }
+```
+
+### 🔹 `DefaultFadeInDuration`
+**Description:** Gets the default duration (in seconds) for fade-in effects across the API.
+```csharp
+public float DefaultFadeInDuration { get; internal set; }
+```
+
+### 🔹 `DefaultFadeOutDuration`
+**Description:** Gets the default duration (in seconds) for fade-out effects across the API.
+```csharp
+public float DefaultFadeOutDuration { get; internal set; }
+```
+
 ---
 
 ## 📦 Class: SpeakerExtensions
@@ -422,21 +470,129 @@ public static void StartAutoStop(this ISpeaker speaker, byte controllerId, float
 
 ## 📦 Class: SpeakerState
 
-### 🔹 `UnknownMethod()`
+### 🔹 `Key`
+**Description:** The unique audio key used to identify and retrieve the associated PCM samples.
+```csharp
+public string Key { get; set; }
+```
+
+### 🔹 `PhysicalSpeaker`
+**Description:** Instance of the physical speaker currently allocated to this session, if any.
+```csharp
+public ISpeaker PhysicalSpeaker;
+```
+
+### 🔹 `HasPhysicalSpeaker`
+**Description:** Indicates whether the device has a physical speaker.
+```csharp
+public bool HasPhysicalSpeaker;
+```
+
+### 🔹 `Position`
+**Description:** The 3D world-space position where the audio was originally placed. Used to reinstantiate spatial audio correctly upon recovery.
+```csharp
+public Vector3 Position { get; set; }
+```
+
+### 🔹 `Loop`
+**Description:** Indicates whether the audio should loop during playback.
+```csharp
+public bool Loop { get; set; }
+```
+
+### 🔹 `Volume`
+**Description:** The playback volume for this session (range: 0.0 to 1.0).
+```csharp
+public float Volume { get; set; }
+```
+
+### 🔹 `MinDistance`
+**Description:** The minimum audible distance from the audio source before volume begins to fall off.
+```csharp
+public float MinDistance { get; set; }
+```
+
+### 🔹 `MaxDistance`
+**Description:** The maximum distance beyond which the audio is no longer heard.
+```csharp
+public float MaxDistance { get; set; }
+```
+
+### 🔹 `IsSpatial`
+**Description:** Whether this session uses 3D spatial audio positioning.
+```csharp
+public bool IsSpatial { get; set; }
+```
+
+### 🔹 `Priority`
+**Description:** Defines the priority level of the session when allocating physical playback resources.
+```csharp
+public AudioPriority Priority { get; set; }
+```
+
+### 🔹 `PlayerFilter`
+**Description:** An optional filter function to determine which players are valid listeners for playback. If provided, audio will only be transmitted to players that satisfy the condition.
+```csharp
+public Func<Player, bool> PlayerFilter { get; set; }
+```
+
+### 🔹 `UnknownMember()`
 **Description:** A list of audio clips that are pending playback, represented as tuples: (<c>key</c>, <c>loop</c>).
 ```csharp
 public List<(string key, bool loop)> QueuedClips { get; set; } = new List<(string key, bool loop)>();
 ```
 
-### 🔹 `UnknownMethod()`
+### 🔹 `Persistent`
+**Description:** Whether this session is flagged for persistence across physical evictions.
+```csharp
+public bool Persistent { get; set; }
+```
+
+### 🔹 `Lifespan`
+**Description:** Optional time (in seconds) to live for this session. If set and <see cref="AutoCleanup"/> is true, the audio auto-fades and stops after this lifespan.
+```csharp
+public float? Lifespan { get; set; }
+```
+
+### 🔹 `AutoCleanup`
+**Description:** Indicates whether the session should automatically stop and fade out after its lifespan ends.
+```csharp
+public bool AutoCleanup { get; set; }
+```
+
+### 🔹 `PlaybackPosition`
+**Description:** The playback position (in seconds or samples, depending on implementation) where audio should resume.
+```csharp
+public float PlaybackPosition { get; set; }
+```
+
+### 🔹 `IsPaused`
+**Description:** Indicates whether the session was explicitly paused. Required to restore the correct state if a physical speaker is evicted and later re-allocated.
+```csharp
+public bool IsPaused { get; set; }
+```
+
+### 🔹 `PcmQueue`
 **Description:** A FIFO queue of PCM buffers waiting to be played by this session. Used for real-time audio streaming.
 ```csharp
 public Queue<float[]> PcmQueue { get; } = new Queue<float[]>();
 ```
 
+### 🔹 `IsStreamOnly`
+**Description:** Indicates wheter the session is stream only - without static audio. Used for real-time audio streaming.
+```csharp
+public bool IsStreamOnly { get; set; }
+```
+
 ---
 
 ## 📦 Class: StaticSpeakerFactory
+
+### 🔹 `Instance`
+**Description:** Retrieves the shared <see cref="ISpeakerFactory"/> instance used natively by the API. Exposed strictly for initializing the router (<see cref="AudioManagerAPI.Features.Management.AudioManager"/>) or dependency injection. Plugins must never cast or use this to manually create/destroy physical speakers.
+```csharp
+public static ISpeakerFactory Instance => factory;
+```
 
 ---
 

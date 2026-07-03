@@ -21,9 +21,6 @@
         /// or dependency injection. Plugins must never cast or use this to manually create/destroy physical speakers.
         /// </summary>
         /// <returns>The shared global <see cref="ISpeakerFactory"/> instance wrapper layer.</returns>
-        public static ISpeakerFactory GetInstance()
-        {
-            return factory;
-        }
+        public static ISpeakerFactory Instance => factory;
     }
 }
