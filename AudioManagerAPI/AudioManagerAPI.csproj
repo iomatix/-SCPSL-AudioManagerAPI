@@ -40,6 +40,10 @@
 		<None Include="LICENSE.md" Pack="true" PackagePath="\" />
 		<None Include="DOCUMENTATION.md" Pack="true" PackagePath="\" />
 	</ItemGroup>
+
+	<PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+		<PackageId>SCPSL-AudioManagerAPI-DEBUG</PackageId>
+	</PropertyGroup>
 	
 	<ItemGroup>
 		<None Include="README.md">
