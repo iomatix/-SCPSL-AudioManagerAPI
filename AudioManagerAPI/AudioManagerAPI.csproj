@@ -39,24 +39,12 @@
 		<None Include="README.md" Pack="true" PackagePath="\" />
 		<None Include="LICENSE.md" Pack="true" PackagePath="\" />
 		<None Include="DOCUMENTATION.md" Pack="true" PackagePath="\" />
+		<None Include="CHANGELOG.md" Pack="true" PackagePath="\" />
 	</ItemGroup>
 
 	<PropertyGroup Condition="'$(Configuration)' == 'Debug'">
 		<PackageId>SCPSL-AudioManagerAPI-DEBUG</PackageId>
 	</PropertyGroup>
-	
-	<ItemGroup>
-		<None Include="README.md">
-			<Pack>true</Pack>
-			<PackagePath></PackagePath>
-			<Visible>true</Visible>
-		</None>
-		<None Include="CHANGELOG.md">
-			<Pack>true</Pack>
-			<PackagePath></PackagePath>
-			<Visible>true</Visible>
-		</None>
-	</ItemGroup>
 
 	<ItemGroup>
 		<PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.300" PrivateAssets="All" />
