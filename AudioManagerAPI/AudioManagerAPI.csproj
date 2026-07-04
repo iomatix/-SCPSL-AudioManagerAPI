@@ -26,7 +26,7 @@
 		<Copyright>© 2026 ioMatix. Licensed under LGPL-3.0-only.</Copyright>
 		<PackageTags>audio scpsl scp-sl labapi unity speaker scp secret laboratory scp-exiled scpsl-exiled exiled scp-api scpsl-api exiled-api api manager controller management features admin toy speaker</PackageTags>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
-		<PackageLicenseFile>LICENSE</PackageLicenseFile>
+		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<PackageChangelogFile>CHANGELOG.md</PackageChangelogFile>
 	</PropertyGroup>
 	<PropertyGroup Condition="'$(Configuration)' == 'Debug'">
@@ -36,17 +36,12 @@
 		<AssemblyName>AudioManagerAPI</AssemblyName>
 	</PropertyGroup>
 	<ItemGroup>
-		<None Remove="LICENSE" />
-		<None Remove="README.md" />
-		<None Remove="CHANGELOG.md" />
+		<None Include="README.md" Pack="true" PackagePath="\" />
+		<None Include="LICENSE.md" Pack="true" PackagePath="\" />
+		<None Include="DOCUMENTATION.md" Pack="true" PackagePath="\" />
 	</ItemGroup>
-
+	
 	<ItemGroup>
-		<None Include="LICENSE">
-			<Pack>true</Pack>
-			<PackagePath></PackagePath>
-			<Visible>true</Visible>
-		</None>
 		<None Include="README.md">
 			<Pack>true</Pack>
 			<PackagePath></PackagePath>
@@ -114,6 +109,13 @@
 		<Reference Include="System.Xml">
 			<HintPath>$(SCPSL_MANAGED)\System.Xml.dll</HintPath>
 		</Reference>
+	</ItemGroup>
+	<ItemGroup>
+	  <None Update="LICENSE.md">
+	    <Pack>true</Pack>
+	    <PackagePath></PackagePath>
+	    <Visible>true</Visible>
+	  </None>
 	</ItemGroup>
 
 	<Target Name="AutoGenerateMarkdownDocs" AfterTargets="Build">
