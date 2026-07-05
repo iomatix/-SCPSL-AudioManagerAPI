@@ -269,6 +269,7 @@
             return sessionId;
         }
 
+        // Todo, invent a better way to handle this.
         private IEnumerator<float> TrackTargetTransformLoop(Func<Vector3> positionProvider, Func<bool> validationCheck, int sessionId, float duration)
         {
             float elapsed = 0f;
