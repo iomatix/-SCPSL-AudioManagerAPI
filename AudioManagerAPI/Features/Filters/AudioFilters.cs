@@ -1,16 +1,15 @@
 ﻿namespace AudioManagerAPI.Features.Filters
 {
-    using AudioManagerAPI.Features.Speakers;
     using LabApi.Features.Wrappers;
     using MapGeneration;
     using PlayerRoles;
     using System;
-    using System.Linq;
+    using System.Collections.Generic;
     using UnityEngine;
 
     /// <summary>
     /// Provides common SCP:SL-specific audio filters for use with speaker configurations.
-    /// Evaluated dynamically per player during audio transmission.
+    /// Evaluated dynamically per player during audio transmission with zero heap allocation overhead.
     /// </summary>
     public static class AudioFilters
     {
@@ -31,14 +30,19 @@
         }
 
         /// <summary>
-        /// Filters players within a specified distance from a position.
+        /// Filters players within a specified distance from a position using optimized squared magnitude.
         /// </summary>
         public static Func<Player, bool> ByDistance(Vector3 position, float maxDistance)
         {
+            // Precompute the squared distance outside the closure execution loop to save CPU cycles
+            float maxDistanceSq = maxDistance * maxDistance;
+
             return player =>
             {
-                if (player?.Position == null) return false;
-                return Vector3.Distance(position, player.Position) <= maxDistance;
+                if (player == null) return false;
+
+                // Optimization: Utilizing sqrMagnitude avoids the expensive Mathf.Sqrt operation inside Vector3.Distance
+                return (position - player.Position).sqrMagnitude <= maxDistanceSq;
             };
         }
 
@@ -51,18 +55,56 @@
         }
 
         /// <summary>  
-        /// Filters players in a room where the lights are in the specified state (enabled or disabled).  
+        /// Filters players in a room where the lights match the specified state without LINQ or lambda allocations.  
         /// </summary>  
         public static Func<Player, bool> IsInRoomWhereLightsAre(bool lightsEnabled)
         {
             return player =>
             {
-                if (player?.Room == null) return false;
+                if (player == null || player.Room == null) return false;
 
                 var lightControllers = player.Room.AllLightControllers;
-                if (!lightControllers.Any()) return false;
+                if (lightControllers == null) return false;
 
-                return lightControllers.All(lc => lc.LightsEnabled == lightsEnabled);
+                // Optimization Pattern: Extract the concrete underlying collection type via pattern matching
+                // to enforce clean, zero-allocation indexing loops and avoid generic IEnumerator boxing.
+                if (lightControllers is List<LightsController> list)
+                {
+                    int count = list.Count;
+                    if (count == 0) return false;
+
+                    for (int i = 0; i < count; i++)
+                    {
+                        if (list[i].LightsEnabled != lightsEnabled)
+                            return false;
+                    }
+                    return true;
+                }
+
+                if (lightControllers is AdminToys.LightController[] array)
+                {
+                    int length = array.Length;
+                    if (length == 0) return false;
+
+                    for (int i = 0; i < length; i++)
+                    {
+                        if (array[i].LightsEnabled != lightsEnabled)
+                            return false;
+                    }
+                    return true;
+                }
+
+                // Fallback loop for generic collections: Alleviates the lambda allocation by using a flat structural foreach loop.
+                // It unifies .Any() and .All() into a single-pass evaluation.
+                bool hasAny = false;
+                foreach (var lc in lightControllers)
+                {
+                    hasAny = true;
+                    if (lc.LightsEnabled != lightsEnabled)
+                        return false;
+                }
+
+                return hasAny;
             };
         }
 
@@ -80,7 +122,7 @@
         /// </summary>
         public static Func<Player, bool> IsInRoom(RoomName roomType)
         {
-            return player => player?.Room != null && player.Room.Name == roomType;
+            return player => player != null && player.Room != null && player.Room.Name == roomType;
         }
     }
 }

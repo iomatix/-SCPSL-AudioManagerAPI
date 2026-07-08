@@ -1,34 +1,21 @@
 ﻿namespace AudioManagerAPI.Speakers.Extensions
 {
-    using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using MEC;
     using AudioManagerAPI.Cache;
     using AudioManagerAPI.Defaults;
-    using AudioManagerAPI.Features.Management;
     using AudioManagerAPI.Features.Speakers;
     using AudioManagerAPI.Speakers.State;
     using LabApi.Features.Wrappers;
-    using Log = AudioManagerAPI.Logger.ApiLogger;
+    using MEC;
+    using System;
+    using System.Collections.Generic;
     using UnityEngine;
+    using Log = AudioManagerAPI.Logger.ApiLogger;
 
     /// <summary>
     /// Provides extension methods for configuring and managing the lifecycle of physical <see cref="ISpeaker"/> instances.
     /// </summary>
     public static class SpeakerExtensions
     {
-        /// <summary>
-        /// Configures the specified physical speaker with audio settings, spatialization, and player filtering.
-        /// </summary>
-        /// <param name="speaker">The speaker instance to configure.</param>
-        /// <param name="volume">The playback volume (range: 0.0 to 1.0).</param>
-        /// <param name="minDistance">The minimum distance at which the audio begins to fall off.</param>
-        /// <param name="maxDistance">The maximum distance beyond which the audio is no longer audible.</param>
-        /// <param name="isSpatial">Determines whether 3D spatial audio positioning is applied.</param>
-        /// <param name="playerFilter">An optional filter to determine which players can hear the audio.</param>
-        /// <returns>The configured <see cref="ISpeaker"/> instance.</returns>
-        /// <exception cref="ArgumentNullException">Thrown when <paramref name="speaker"/> is null.</exception>
         public static ISpeaker Configure(this ISpeaker speaker, float volume, float minDistance, float maxDistance, bool isSpatial, Func<Player, bool> playerFilter = null)
         {
             if (speaker == null)
@@ -55,9 +42,6 @@
             return speaker;
         }
 
-        /// <summary>
-        /// Updates the playback position in the session state for persistent speakers.
-        /// </summary>
         public static bool UpdatePlaybackPosition(this ISpeaker speaker, byte controllerId, SpeakerState state)
         {
             if (speaker == null)
@@ -75,9 +59,6 @@
             return false;
         }
 
-        /// <summary>
-        /// Sets the volume for the specified physical speaker.
-        /// </summary>
         public static bool SetVolume(this ISpeaker speaker, float volume)
         {
             if (speaker == null)
@@ -95,9 +76,6 @@
             return false;
         }
 
-        /// <summary>
-        /// Sets the 3D world position for the specified physical speaker.
-        /// </summary>
         public static bool SetPosition(this ISpeaker speaker, Vector3 position)
         {
             if (speaker == null)
@@ -114,7 +92,7 @@
         }
 
         /// <summary>
-        /// Restores queued clips from the session state to the speaker's playback queue.
+        /// Restores queued clips from the session state to the speaker's playback queue without LINQ allocation.
         /// </summary>
         public static int RestoreQueue(this ISpeaker speaker, SpeakerState state, AudioCache audioCache)
         {
@@ -123,20 +101,26 @@
             if (audioCache == null) throw new ArgumentNullException(nameof(audioCache));
 
             int queuedCount = 0;
-            if (state.QueuedClips.Any())
+            int listCount = state.QueuedClips.Count;
+
+            // Optimization: Replaced .Any() with a direct Count properties verification
+            if (listCount > 0)
             {
-                foreach (var (clipKey, clipLoop) in state.QueuedClips)
+                // Optimization: Replaced foreach loop with index-based for loop to avoid structure-enumerator copy operations
+                for (int i = 0; i < listCount; i++)
                 {
-                    var samples = audioCache.Get(clipKey);
+                    var clip = state.QueuedClips[i];
+                    var samples = audioCache.Get(clip.key);
+
                     if (samples != null)
                     {
-                        speaker.Queue(samples, clipLoop);
+                        speaker.Queue(samples, clip.loop);
                         queuedCount++;
-                        Log.Debug($"[SpeakerExtensions] Queued clip {clipKey} (loop: {clipLoop}) for speaker.");
+                        Log.Debug($"[SpeakerExtensions] Queued clip {clip.key} (loop: {clip.loop}) for speaker.");
                     }
                     else
                     {
-                        Log.Warn($"[SpeakerExtensions] Failed to queue clip {clipKey}: Not found in cache.");
+                        Log.Warn($"[SpeakerExtensions] Failed to queue clip {clip.key}: Not found in cache.");
                     }
                 }
             }
@@ -144,9 +128,6 @@
             return queuedCount;
         }
 
-        /// <summary>
-        /// Clears the playback queue for the specified physical speaker.
-        /// </summary>
         public static bool ClearQueue(this ISpeaker speaker, SpeakerState state = null)
         {
             if (speaker == null)
@@ -168,7 +149,7 @@
         }
 
         /// <summary>
-        /// Retrieves the current queue status for the specified physical speaker.
+        /// Retrieves the current queue status safely with zero allocation.
         /// </summary>
         public static (int queuedCount, string currentClip) GetQueueStatus(this ISpeaker speaker, SpeakerState state = null)
         {
@@ -178,16 +159,18 @@
             if (speaker is DefaultSpeakerToyAdapter adapter)
             {
                 int queuedCount = adapter.QueuedClipsCount;
-                string currentClip = state?.QueuedClips.FirstOrDefault().key;
+
+                // Optimization: Replaced .FirstOrDefault() LINQ chain with a safe, direct indexer access
+                string currentClip = (state != null && state.QueuedClips.Count > 0)
+                    ? state.QueuedClips[0].key
+                    : null;
+
                 return (queuedCount, currentClip);
             }
 
             return (0, null);
         }
 
-        /// <summary>
-        /// Validates the abstract session state for consistency and correctness.
-        /// </summary>
         public static bool ValidateState(this SpeakerState state)
         {
             if (state == null)
@@ -195,7 +178,8 @@
 
             bool isValid = true;
 
-            if (state.Persistent && string.IsNullOrEmpty(state.Key) && !state.QueuedClips.Any())
+            // Optimization: Replaced .Any() with direct Count verification
+            if (state.Persistent && string.IsNullOrEmpty(state.Key) && state.QueuedClips.Count == 0)
             {
                 Log.Warn("[SpeakerExtensions] Invalid SpeakerState: Persistent session must have a Key or non-empty QueuedClips.");
                 isValid = false;
@@ -228,9 +212,6 @@
             return isValid;
         }
 
-        /// <summary>
-        /// Initiates a coroutine that automatically stops and fades out the physical speaker after a set lifespan.
-        /// </summary>
         public static void StartAutoStop(this ISpeaker speaker, byte controllerId, float lifespan, bool autoCleanup, Action<byte> fadeOutAction)
         {
             if (speaker == null)

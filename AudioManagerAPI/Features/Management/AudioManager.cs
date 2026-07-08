@@ -164,7 +164,7 @@
         {
             if (validPlayersFilter == null)
             {
-                validPlayersFilter = p => Player.ReadyList.Contains(p);
+                validPlayersFilter = p => p != null && p.IsReady;
             }
 
             int sessionId = PlayAudio(
