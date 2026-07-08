@@ -1,77 +1,65 @@
 ﻿namespace AudioManagerAPI.Decoders
 {
+    using NLayer;
     using System;
-    using System.Collections.Generic;
+    using System.Buffers;
     using System.IO;
-    using System.Linq;
-    using System.Text;
-    using System.Threading.Tasks;
 
+    /// <summary>
+    /// Provides cross-platform, high-performance MPEG-1 Layer III (MP3) decoding capabilities
+    /// using a fully managed parsing engine with zero native OS dependencies.
+    /// </summary>
     internal static class Mp3Decoder
     {
-        // Minimal MPEG1 Layer III decoder using built-in ACM (Windows)
-        // This avoids external libraries and works on all SCP:SL servers.
-
         /// <summary>
-        /// Decodes a raw binary byte array containing MP3 audio streams into a 16-bit linear PCM signed short array utilizing the native Windows Audio Compression Manager (ACM).
+        /// Decodes an MP3 binary stream directly into a rented float PCM array.
+        /// Native Linux/Docker compliant - completely bypasses Windows ACM subsystems.
         /// </summary>
-        /// <param name="mp3Bytes">The raw compressed binary data stream representing the source MPEG-1 Layer III audio asset.</param>
-        /// <returns>A strongly-typed array of 16-bit signed integers (PCM16 audio samples) if the streaming transaction succeeds; otherwise, <c>null</c>.</returns>
-        public static short[] DecodeMp3ToPcm16(byte[] mp3Bytes)
+        /// <param name="mp3Stream">The source compressed input stream containing MPEG data.</param>
+        /// <param name="totalSamples">The exact number of valid float samples written to the rented array.</param>
+        /// <param name="sampleRate">The native sampling rate discovered in the MP3 frame headers.</param>
+        /// <param name="channels">The channel count (e.g., 1 for Mono, 2 for Stereo) of the source asset.</param>
+        /// <returns>A pooled float array containing the linear PCM data; must be returned to ArrayPool after usage.</returns>
+        public static float[] DecodeMp3ToFloatRented(Stream mp3Stream, out int totalSamples, out int sampleRate, out int channels)
         {
-            using (var mp3Stream = new MemoryStream(mp3Bytes))
-            using (var mp3Reader = new System.Media.SoundPlayer()) // ACM-backed
-            {
-                try
-                {
-                    // Load MP3 into ACM decoder
-                    var tempWav = Mp3ToWav(mp3Bytes);
-                    if (tempWav == null)
-                        return null;
+            if (mp3Stream == null)
+                throw new ArgumentNullException(nameof(mp3Stream));
 
-                    // Extract PCM16 from WAV
-                    return ExtractPcm16FromWav(tempWav);
-                }
-                catch
-                {
-                    return null;
-                }
-            }
-        }
-
-        private static byte[] Mp3ToWav(byte[] mp3Bytes)
-        {
-            using (var mp3 = new MemoryStream(mp3Bytes))
-            using (var wav = new MemoryStream())
+            try
             {
-                try
+                // NLayer operates entirely in managed memory, safeguarding against Linux DllNotFoundExceptions
+                using (var mpegFile = new MpegFile(mp3Stream))
                 {
-                    using (var reader = new NAudio.Wave.Mp3FileReader(mp3))
-                    using (var pcm = new NAudio.Wave.WaveFormatConversionStream(new NAudio.Wave.WaveFormat(44100, 16, 2), reader))
+                    sampleRate = mpegFile.SampleRate;
+                    channels = mpegFile.Channels;
+
+                    long sampleLength = mpegFile.Length;
+                    if (sampleLength <= 0)
                     {
-                        pcm.CopyTo(wav);
-                        return wav.ToArray();
+                        totalSamples = 0;
+                        return null;
                     }
-                }
-                catch
-                {
-                    return null;
+
+                    totalSamples = (int)sampleLength;
+
+                    // Allocation Optimization: Rent the buffer directly to prevent transient heap spikes
+                    float[] rentedBuffer = ArrayPool<float>.Shared.Rent(totalSamples);
+
+                    // Decode and stream directly into the rented block without intermediate byte arrays
+                    int samplesRead = mpegFile.ReadSamples(rentedBuffer, 0, totalSamples);
+
+                    // Handle VBR (Variable Bitrate) size discrepancies or frame paddings safely
+                    totalSamples = samplesRead;
+                    return rentedBuffer;
                 }
             }
-        }
-
-        private static short[] ExtractPcm16FromWav(byte[] wavBytes)
-        {
-            // Skip WAV header (44 bytes)
-            if (wavBytes.Length < 44)
+            catch (Exception)
+            {
+                totalSamples = 0;
+                sampleRate = 0;
+                channels = 0;
                 return null;
-
-            int pcmLength = wavBytes.Length - 44;
-            short[] pcm = new short[pcmLength / 2];
-
-            Buffer.BlockCopy(wavBytes, 44, pcm, 0, pcmLength);
-            return pcm;
+            }
         }
     }
-
 }
