@@ -51,6 +51,7 @@
 		<PackageReference Include="NAudio" Version="2.3.0" />
 		<PackageReference Include="Northwood.LabAPI" Version="1.1.7" />
 		<PackageReference Include="System.Text.Json" Version="10.0.9" />
+		<PackageReference Include="System.Buffers" Version="4.6.1" ExcludeAssets="compile" />
 		<None Include="$(OutputPath)\$(AssemblyName).xml">
 			<Pack>true</Pack>
 			<PackagePath>lib\net48\</PackagePath>

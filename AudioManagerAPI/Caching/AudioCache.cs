@@ -1,17 +1,16 @@
 ﻿namespace AudioManagerAPI.Cache
 {
+    using LabApi.Features.Console;
     using System;
+    using System.Buffers;
     using System.Collections.Generic;
     using System.IO;
     using System.Text;
     using System.Threading;
-    using MEC;
-
-    using Log = LabApi.Features.Console.Logger;
 
     /// <summary>
     /// Thread-safe audio sample cache implementing predictive background pre-decoding, 
-    /// lock-free multi-format parsing, and least-recently-used (LRU) memory eviction.
+    /// lock-free multi-format parsing, and least-recently-used (LRU) memory eviction with ArrayPool optimization.
     /// </summary>
     public class AudioCache
     {
@@ -30,10 +29,6 @@
             _streamProviders = new Dictionary<string, Func<Stream>>();
         }
 
-        /// <summary>
-        /// Registers a stream provider and dispatches a background worker thread to proactively 
-        /// pre-decode the asset into RAM, eliminating first-play disk I/O stutter.
-        /// </summary>
         public void Register(string key, Func<Stream> streamProvider)
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
@@ -47,7 +42,6 @@
                 _streamProviders[key] = streamProvider;
             }
 
-            // Offloading execution to the global thread pool instantly avoids blocking the server boostrap process.
             ThreadPool.QueueUserWorkItem(state =>
             {
                 try
@@ -66,15 +60,11 @@
                 }
                 catch (Exception ex)
                 {
-                    Log.Error($"[AudioManagerAPI] Predictive background audio warmup failed for '{key}': {ex.Message}");
+                    Logger.Error($"[AudioManagerAPI] Predictive background audio warmup failed for '{key}': {ex.Message}");
                 }
             });
         }
 
-        /// <summary>
-        /// Resolves audio sample references, executing on-demand lock-free decoding 
-        /// only if the predictive background warmup has not completed yet.
-        /// </summary>
         public float[] Get(string key)
         {
             Func<Stream> providerToExecute = null;
@@ -93,7 +83,6 @@
                 }
             }
 
-            // I/O block runs detached from the lock to secure server frame-rate stability if a cache-miss occurs.
             Stream stream = null;
             try
             {
@@ -101,7 +90,7 @@
             }
             catch (Exception ex)
             {
-                Log.Error($"[AudioManagerAPI] Failed to invoke stream provider for key '{key}': {ex.Message}");
+                Logger.Error($"[AudioManagerAPI] Failed to invoke stream provider for key '{key}': {ex.Message}");
                 return null;
             }
 
@@ -110,7 +99,6 @@
 
             lock (_lockObject)
             {
-                // Double-Check Pattern: Validates if a background thread committed the identical asset during our detached I/O loop.
                 if (_cache.TryGetValue(key, out var existingSamples))
                 {
                     UpdateLRU(key);
@@ -122,9 +110,6 @@
             }
         }
 
-        /// <summary>
-        /// Inserts an item into memory maps and handles LRU tracking mechanics under lock safety.
-        /// </summary>
         private void CommitCacheInsertion(string key, float[] samples)
         {
             if (_cache.Count >= _maxSize)
@@ -132,7 +117,7 @@
                 var lruKey = _lruOrder.Last.Value;
                 _cache.Remove(lruKey);
                 _lruOrder.RemoveLast();
-                Log.Debug($"[AudioManagerAPI] Evicted cached audio '{lruKey}' due to memory limits.");
+                Logger.Debug($"[AudioManagerAPI] Evicted cached audio '{lruKey}' due to memory limits.");
             }
 
             _cache[key] = samples;
@@ -171,7 +156,7 @@
             }
             catch (Exception ex)
             {
-                Log.Error($"[AudioManagerAPI] Audio cache exception while loading '{key}': {ex.Message}");
+                Logger.Error($"[AudioManagerAPI] Audio cache exception while loading '{key}': {ex.Message}");
                 return null;
             }
         }
@@ -179,7 +164,7 @@
         private float[] LoadWavAsFloat(BinaryReader reader, string key)
         {
             if (new string(reader.ReadChars(4)) != "RIFF") return null;
-            reader.ReadInt32(); // File size
+            reader.ReadInt32();
             if (new string(reader.ReadChars(4)) != "WAVE") return null;
 
             int channels = 1;
@@ -198,8 +183,8 @@
                     audioFormat = reader.ReadInt16();
                     channels = reader.ReadInt16();
                     sampleRate = reader.ReadInt32();
-                    reader.ReadInt32(); // byteRate
-                    reader.ReadInt16(); // blockAlign
+                    reader.ReadInt32();
+                    reader.ReadInt16();
                     bitsPerSample = reader.ReadInt16();
 
                     int remaining = chunkSize - 16;
@@ -218,24 +203,38 @@
 
             if (dataBytes == null) return null;
 
-            var samples = ConvertPcmToFloat(dataBytes, audioFormat, bitsPerSample, channels, key);
-            if (samples == null) return null;
+            int currentLength = 0;
+            float[] currentSamples = ConvertPcmToFloatRented(dataBytes, audioFormat, bitsPerSample, channels, key, out currentLength);
+            if (currentSamples == null) return null;
 
             if (channels > 1)
-                samples = DownmixToMono(samples, channels);
+            {
+                float[] monoSamples = DownmixToMonoRented(currentSamples, currentLength, channels, out int monoLength);
+                ArrayPool<float>.Shared.Return(currentSamples);
+                currentSamples = monoSamples;
+                currentLength = monoLength;
+            }
 
             if (sampleRate != TargetSampleRate && sampleRate > 0)
-                samples = ResampleLinear(samples, sampleRate, TargetSampleRate);
+            {
+                float[] resampledSamples = ResampleLinearRented(currentSamples, currentLength, sampleRate, TargetSampleRate, out int resampledLength);
+                ArrayPool<float>.Shared.Return(currentSamples);
+                currentSamples = resampledSamples;
+                currentLength = resampledLength;
+            }
 
-            return samples;
+            float[] finalExactArray = new float[currentLength];
+            Array.Copy(currentSamples, 0, finalExactArray, 0, currentLength);
+            ArrayPool<float>.Shared.Return(currentSamples);
+
+            return finalExactArray;
         }
 
-        private float[] ConvertPcmToFloat(byte[] rawData, short audioFormat, short bitsPerSample, int channels, string key)
+        private float[] ConvertPcmToFloatRented(byte[] rawData, short audioFormat, short bitsPerSample, int channels, string key, out int outLength)
         {
             int frameCount;
             float[] samples;
 
-            // Multiplication is historically faster than division within hot loops.
             const float int16Inverse = 1f / 32768f;
             const float int24Inverse = 1f / 8388608f;
             const float int32Inverse = 1f / 2147483648f;
@@ -244,8 +243,9 @@
             {
                 case 16:
                     frameCount = rawData.Length / 2 / channels;
-                    samples = new float[frameCount * channels];
-                    for (int i = 0; i < samples.Length; i++)
+                    outLength = frameCount * channels;
+                    samples = ArrayPool<float>.Shared.Rent(outLength);
+                    for (int i = 0; i < outLength; i++)
                     {
                         short pcm = (short)(rawData[i * 2] | (rawData[i * 2 + 1] << 8));
                         samples[i] = pcm * int16Inverse;
@@ -254,8 +254,9 @@
 
                 case 24:
                     frameCount = rawData.Length / 3 / channels;
-                    samples = new float[frameCount * channels];
-                    for (int i = 0; i < samples.Length; i++)
+                    outLength = frameCount * channels;
+                    samples = ArrayPool<float>.Shared.Rent(outLength);
+                    for (int i = 0; i < outLength; i++)
                     {
                         int index = i * 3;
                         int value = (rawData[index] | (rawData[index + 1] << 8) | (rawData[index + 2] << 16));
@@ -267,16 +268,17 @@
 
                 case 32:
                     frameCount = rawData.Length / 4 / channels;
-                    samples = new float[frameCount * channels];
+                    outLength = frameCount * channels;
+                    samples = ArrayPool<float>.Shared.Rent(outLength);
 
-                    if (audioFormat == 3) // IEEE float
+                    if (audioFormat == 3)
                     {
-                        for (int i = 0; i < samples.Length; i++)
+                        for (int i = 0; i < outLength; i++)
                             samples[i] = BitConverter.ToSingle(rawData, i * 4);
                     }
-                    else // PCM 32-bit Integer
+                    else
                     {
-                        for (int i = 0; i < samples.Length; i++)
+                        for (int i = 0; i < outLength; i++)
                         {
                             int value = BitConverter.ToInt32(rawData, i * 4);
                             samples[i] = value * int32Inverse;
@@ -285,17 +287,17 @@
                     return samples;
 
                 default:
-                    Log.Warn($"[AudioManagerAPI] Unsupported WAV bit depth {bitsPerSample} for '{key}'.");
+                    Logger.Warn($"[AudioManagerAPI] Unsupported WAV bit depth {bitsPerSample} for '{key}'.");
+                    outLength = 0;
                     return null;
             }
         }
 
-        private float[] DownmixToMono(float[] samples, int channels)
+        private float[] DownmixToMonoRented(float[] samples, int samplesLength, int channels, out int outLength)
         {
-            if (channels == 1) return samples;
-
-            int frames = samples.Length / channels;
-            var mono = new float[frames];
+            int frames = samplesLength / channels;
+            outLength = frames;
+            var mono = ArrayPool<float>.Shared.Rent(outLength);
             float inv = 1f / channels;
 
             for (int f = 0; f < frames; f++)
@@ -310,13 +312,19 @@
             return mono;
         }
 
-        private float[] ResampleLinear(float[] input, int srcRate, int dstRate)
+        private float[] ResampleLinearRented(float[] input, int inputLength, int srcRate, int dstRate, out int outLength)
         {
-            if (srcRate == dstRate || input.Length == 0) return input;
+            if (srcRate == dstRate || inputLength == 0)
+            {
+                outLength = inputLength;
+                var identity = ArrayPool<float>.Shared.Rent(outLength);
+                Array.Copy(input, 0, identity, 0, inputLength);
+                return identity;
+            }
 
             double ratio = (double)dstRate / srcRate;
-            int outLength = (int)Math.Max(1, Math.Round(input.Length * ratio));
-            var output = new float[outLength];
+            outLength = (int)Math.Max(1, Math.Round(inputLength * ratio));
+            var output = ArrayPool<float>.Shared.Rent(outLength);
 
             double pos = 0.0;
             double step = 1.0 / ratio;
@@ -326,9 +334,9 @@
                 int idx = (int)pos;
                 double frac = pos - idx;
 
-                if (idx >= input.Length - 1)
+                if (idx >= inputLength - 1)
                 {
-                    output[i] = input[input.Length - 1];
+                    output[i] = input[inputLength - 1];
                 }
                 else
                 {
@@ -364,27 +372,46 @@
                         byte[] pcmBytes = mem.ToArray();
 
                         int sampleCount = pcmBytes.Length / 2;
-                        short[] pcm16 = new short[sampleCount];
+
+                        short[] pcm16 = ArrayPool<short>.Shared.Rent(sampleCount);
                         Buffer.BlockCopy(pcmBytes, 0, pcm16, 0, pcmBytes.Length);
 
-                        float[] samples = new float[sampleCount];
+                        int currentLength = sampleCount;
+                        float[] currentSamples = ArrayPool<float>.Shared.Rent(currentLength);
+
                         const float inv = 1f / 32768f;
-                        for (int i = 0; i < sampleCount; i++)
-                            samples[i] = pcm16[i] * inv;
+                        for (int i = 0; i < currentLength; i++)
+                            currentSamples[i] = pcm16[i] * inv;
+
+                        ArrayPool<short>.Shared.Return(pcm16);
 
                         if (channels > 1)
-                            samples = DownmixToMono(samples, channels);
+                        {
+                            float[] monoSamples = DownmixToMonoRented(currentSamples, currentLength, channels, out int monoLength);
+                            ArrayPool<float>.Shared.Return(currentSamples);
+                            currentSamples = monoSamples;
+                            currentLength = monoLength;
+                        }
 
                         if (sampleRate != TargetSampleRate)
-                            samples = ResampleLinear(samples, sampleRate, TargetSampleRate);
+                        {
+                            float[] resampledSamples = ResampleLinearRented(currentSamples, currentLength, sampleRate, TargetSampleRate, out int resampledLength);
+                            ArrayPool<float>.Shared.Return(currentSamples);
+                            currentSamples = resampledSamples;
+                            currentLength = resampledLength;
+                        }
 
-                        return samples;
+                        float[] finalExactArray = new float[currentLength];
+                        Array.Copy(currentSamples, 0, finalExactArray, 0, currentLength);
+                        ArrayPool<float>.Shared.Return(currentSamples);
+
+                        return finalExactArray;
                     }
                 }
             }
             catch (Exception ex)
             {
-                Log.Error($"[AudioManagerAPI] MP3 decode exception for '{key}': {ex.Message}");
+                Logger.Error($"[AudioManagerAPI] MP3 decode exception for '{key}': {ex.Message}");
                 return null;
             }
         }

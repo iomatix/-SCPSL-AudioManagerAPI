@@ -81,7 +81,7 @@
                     return true;
                 }
 
-                if (lightControllers is AdminToys.LightController[] array)
+                if (lightControllers is LightsController[] array)
                 {
                     int length = array.Length;
                     if (length == 0) return false;
