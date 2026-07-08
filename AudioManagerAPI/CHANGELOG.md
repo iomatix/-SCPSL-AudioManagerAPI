@@ -1,5 +1,24 @@
 ﻿# SCPSL-AudioManagerAPI — Changelog
 
+## 🆕 Changelog — Version 2.4.0 — Cross-Platform Performance & Concurrency Consolidation
+
+### Core Optimization & Architecture (Hot Paths)
+- **Zero-Allocation Filtering**: Eliminated LINQ method extensions (`Any`, `All`, `FirstOrDefault`) within dynamic evaluation gates and replaced them with concrete indexing loops and collection pattern matching, completely mitigating generic enumerator boxing overhead on the heap.
+- **Micro-Mathematical Optimization**: Replaced `Vector3.Distance` with squared magnitude (`sqrMagnitude`) comparisons inside distance-based filtering closures, entirely bypassing expensive square-root (`Mathf.Sqrt`) processing branches.
+- **Global Complexity Flattening**: Resolved an $O(N^2)$ execution bottleneck in global playback routines by refactoring the player validation gate from a linear list search (`Contains`) to an immediate, lock-free state property verification.
+
+### Live VoIP Streaming & Eviction Recovery
+- **Synchronized Jitter Buffering**: Rectified a critical packet loss flaw where live streaming-only sessions (`IsStreamOnly`) discarded incoming real-time frames during hardware controller eviction. Introduced a thread-safe staging buffer using localized locks on the internal PCM queue.
+- **Eviction Recovery Flush Pass**: Enhanced the physical controller initialization pipeline to atomically drain and flush outstanding buffered streaming data frames into newly allocated network speaker toys upon hardware restoration.
+
+### Memory & Resource Management
+- **Pooled Transient Processing**: Integrated `System.Buffers.ArrayPool<float>` and `ArrayPool<short>` allocation mechanics within audio cache transformation routines (PCM bit conversions, mono downmixing, linear resampling), removing temporary array allocations from the heap.
+- **Stream Provider Registry Leak Fix**: Resolved a long-term memory leak within the LRU cache eviction lifecycle by ensuring that when an asset is evicted from RAM, its associated background stream provider factory delegate is thoroughly purged to release lingering closure references.
+
+### Cross-Platform Compliance & Concurrency
+- **Fully Managed MPEG Decoding**: Bypassed native Windows Audio Compression Manager (ACM) subsystems and NAudio's native conversion streams by implementing a 100% managed, cross-platform `NLayer` parsing core, allowing flawless deployments on Linux and Docker nodes without platform exceptions.
+- **Fine-Grained Concurrency Controls**: Deprecated the coarse-grained global instance `lock` primitive across the main orchestration router, transitioning state modifications to lock-free operations backed by `ConcurrentDictionary` and a micro-scoped speaker initialization lock to permanently eliminate lock inversion risks and potential deadlocks.
+
 ## 🆕 Changelog — Version 2.3.1-2.3.6 — API Native Paranoia & Spatial Tracking
 
 ### Core API Extensions
