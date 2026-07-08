@@ -16,7 +16,7 @@
     using System.IO;
     using UnityEngine;
 
-    using Log = LabApi.Features.Console.Logger;
+    using Log = AudioManagerAPI.Logger.ApiLogger;
 
     /// <summary>
     /// High-performance, deadlock-free audio orchestration router utilizing fine-grained concurrency controls 
@@ -366,7 +366,7 @@
             bool initialLoop,
             bool isQueued)
         {
-            Log.Debug($" InitializePhysicalSpeaker: session={sessionId}, controllerId={controllerId}");
+            Log.Debug($"InitializePhysicalSpeaker: session={sessionId}, controllerId={controllerId}");
 
             ISpeaker speaker = speakerFactory.CreateSpeaker(state.Position, controllerId);
             if (speaker == null)
