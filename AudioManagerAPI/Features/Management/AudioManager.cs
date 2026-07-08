@@ -768,33 +768,27 @@
         }
 
         #region Real-Time Audio Streaming
-        [Obsolete("Use AppendPcmData(int, float[]) instead.")]
-        public void AppendPcmData(int sessionId, short[] pcm)
-        {
-            if (pcm == null || pcm.Length == 0)
-                return;
-
-            var samples = new float[pcm.Length];
-            const float inv = 1f / 32768f;
-
-            for (int i = 0; i < pcm.Length; i++)
-                samples[i] = pcm[i] * inv;
-
-            AppendPcmData(sessionId, samples);
-        }
-
         public void AppendPcmData(int sessionId, float[] samples)
         {
             var state = ControllerIdManager.GetSessionState(sessionId);
             if (state == null || samples == null || samples.Length == 0)
                 return;
 
-            if (!state.IsStreamOnly)
-                state.PcmQueue.Enqueue(samples);
-
+            // Bugfix VoIP: Enqueue data if it's a static-backed stream (!IsStreamOnly)
+            // OR if a live stream-only/VoIP session is temporarily evicted from physical hardware (!HasPhysicalSpeaker)
+            if (!state.IsStreamOnly || !state.HasPhysicalSpeaker)
+            {
+                // Thread-Safety: Protect the underlying non-thread-safe Queue container from multi-threaded access
+                lock (state.PcmQueue)
+                {
+                    state.PcmQueue.Enqueue(samples);
+                }
+            }
 
             if (state.HasPhysicalSpeaker && state.PhysicalSpeaker != null)
+            {
                 state.PhysicalSpeaker.AppendPcm(samples);
+            }
         }
 
         public int CreateStreamSession(

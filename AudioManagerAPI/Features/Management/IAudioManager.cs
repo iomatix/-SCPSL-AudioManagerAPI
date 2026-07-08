@@ -227,15 +227,9 @@
 
         /// <summary>
         /// Appends raw PCM audio data (float, -1..1) to the playback queue of an existing session.
-        /// This is the primary real-time streaming API.
+        /// Handles seamless thread-safe buffering if the session is currently evicted from hardware components.
         /// </summary>
         void AppendPcmData(int sessionId, float[] samples);
-
-        /// <summary>
-        /// Legacy overload for backward compatibility. Converts short PCM to float internally.
-        /// </summary>
-        [Obsolete("Use AppendPcmData(int, float[]) instead. This overload exists only for backward compatibility.")]
-        void AppendPcmData(int sessionId, short[] pcm);
 
         /// <summary>
         /// Creates a new audio stream session at the specified 3D position.
