@@ -400,17 +400,16 @@
             }
         }
         private void InitializePhysicalSpeaker(
-            byte controllerId,
-            int sessionId,
-            SpeakerState state,
-            float[] initialSamples,
-            bool initialLoop,
-            bool isQueued)
+                    byte controllerId,
+                    int sessionId,
+                    SpeakerState state,
+                    float[] initialSamples,
+                    bool initialLoop,
+                    bool isQueued)
         {
             Log.Debug($"[AudioManagerAPI] InitializePhysicalSpeaker: session={sessionId}, controllerId={controllerId}, hasSamples={(initialSamples != null)}");
 
-            // STEP 1: Instantiate the physical speaker components (heavy Unity factory allocation) 
-            // OUTSIDE the lock block to maintain high performance and prevent thread starvation.
+            // STEP 1: Instantiate the physical speaker components outside the lock block to maintain high performance
             ISpeaker speaker = speakerFactory.CreateSpeaker(state.Position, controllerId);
             if (speaker == null)
             {
@@ -422,8 +421,7 @@
                 return;
             }
 
-            // STEP 2: Perform structural slot evaluations and old instance teardowns INSIDE the atomic lock.
-            // This fully eliminates the risk of creating orphaned background AudioSource memory leaks.
+            // STEP 2: Perform structural slot evaluations and old instance teardowns inside the atomic lock
             lock (lockObject)
             {
                 if (speakers.TryGetValue(controllerId, out ISpeaker oldSpeaker) && oldSpeaker != null)
@@ -437,6 +435,7 @@
 
                 speakers[controllerId] = speaker;
             }
+
             // STEP 3: Complete remaining data configurations safely outside the lock block
             speaker.Configure(state.Volume, state.MinDistance, state.MaxDistance, state.IsSpatial, null);
 
@@ -448,6 +447,7 @@
             state.PhysicalSpeaker = speaker;
             state.HasPhysicalSpeaker = true;
 
+            // Trigger structural speaker initialization pipeline to kick off LabAPI transmitter state machine
             if (initialSamples == null)
             {
                 speaker.Play(new float[] { 0f }, false, 0f);
@@ -460,6 +460,23 @@
             {
                 speaker.Play(initialSamples, initialLoop, state.PlaybackPosition);
                 OnPlaybackStarted?.Invoke(sessionId);
+            }
+
+            // ===================================================================
+            // BUGFIX VOIP: RECOVERY JITTER BUFFER FLUSH PASS
+            // ===================================================================
+            // If the session accumulated live PCM streaming chunks while it was evicted,
+            // we flush the abstract FIFO queue directly into the newly allocated physical speaker.
+            lock (state.PcmQueue)
+            {
+                while (state.PcmQueue.Count > 0)
+                {
+                    float[] bufferedSamples = state.PcmQueue.Dequeue();
+                    if (bufferedSamples != null && bufferedSamples.Length > 0)
+                    {
+                        speaker.AppendPcm(bufferedSamples);
+                    }
+                }
             }
 
             // ===================================================================
