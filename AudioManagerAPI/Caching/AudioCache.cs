@@ -7,7 +7,7 @@
     using System.IO;
     using System.Text;
     using System.Threading;
-    using Logger = AudioManagerAPI.Logger.ApiLogger;
+    using Log = AudioManagerAPI.Logger.ApiLogger;
 
     /// <summary>
     /// Thread-safe audio sample cache implementing predictive background pre-decoding, 

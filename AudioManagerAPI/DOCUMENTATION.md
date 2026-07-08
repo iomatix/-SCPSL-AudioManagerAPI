@@ -2,18 +2,6 @@
 
 ## 📦 Class: AudioCache
 
-### 🔹 `Register()`
-**Description:** Registers a stream provider and dispatches a background worker thread to proactively pre-decode the asset into RAM, eliminating first-play disk I/O stutter.
-```csharp
-public void Register(string key, Func<Stream> streamProvider)
-```
-
-### 🔹 `Get()`
-**Description:** Resolves audio sample references, executing on-demand lock-free decoding only if the predictive background warmup has not completed yet.
-```csharp
-public float[] Get(string key)
-```
-
 ---
 
 ## 📦 Class: AudioConfig
@@ -84,10 +72,10 @@ public static void FullReset()
 
 ## 📦 Class: Mp3Decoder
 
-### 🔹 `DecodeMp3ToPcm16()`
-**Description:** Decodes a raw binary byte array containing MP3 audio streams into a 16-bit linear PCM signed short array utilizing the native Windows Audio Compression Manager (ACM).
+### 🔹 `DecodeMp3ToFloatRented()`
+**Description:** Decodes an MP3 binary stream directly into a rented float PCM array. Native Linux/Docker compliant - completely bypasses Windows ACM subsystems.
 ```csharp
-public static short[] DecodeMp3ToPcm16(byte[] mp3Bytes)
+public static float[] DecodeMp3ToFloatRented(Stream mp3Stream, out int totalSamples, out int sampleRate, out int channels)
 ```
 
 ---
@@ -351,7 +339,7 @@ public static Func<Player, bool> ByTeam(Team team)
 ```
 
 ### 🔹 `ByDistance()`
-**Description:** Filters players within a specified distance from a position.
+**Description:** Filters players within a specified distance from a position using optimized squared magnitude.
 ```csharp
 public static Func<Player, bool> ByDistance(Vector3 position, float maxDistance)
 ```
@@ -363,7 +351,7 @@ public static Func<Player, bool> IsAlive()
 ```
 
 ### 🔹 `IsInRoomWhereLightsAre()`
-**Description:** Filters players in a room where the lights are in the specified state (enabled or disabled).
+**Description:** Filters players in a room where the lights match the specified state without LINQ or lambda allocations.
 ```csharp
 public static Func<Player, bool> IsInRoomWhereLightsAre(bool lightsEnabled)
 ```
@@ -412,58 +400,16 @@ public float DefaultFadeOutDuration { get; internal set; }
 
 ## 📦 Class: SpeakerExtensions
 
-### 🔹 `Configure()`
-**Description:** Configures the specified physical speaker with audio settings, spatialization, and player filtering.
-```csharp
-public static ISpeaker Configure(this ISpeaker speaker, float volume, float minDistance, float maxDistance, bool isSpatial, Func<Player, bool> playerFilter = null)
-```
-
-### 🔹 `UpdatePlaybackPosition()`
-**Description:** Updates the playback position in the session state for persistent speakers.
-```csharp
-public static bool UpdatePlaybackPosition(this ISpeaker speaker, byte controllerId, SpeakerState state)
-```
-
-### 🔹 `SetVolume()`
-**Description:** Sets the volume for the specified physical speaker.
-```csharp
-public static bool SetVolume(this ISpeaker speaker, float volume)
-```
-
-### 🔹 `SetPosition()`
-**Description:** Sets the 3D world position for the specified physical speaker.
-```csharp
-public static bool SetPosition(this ISpeaker speaker, Vector3 position)
-```
-
 ### 🔹 `RestoreQueue()`
-**Description:** Restores queued clips from the session state to the speaker's playback queue.
+**Description:** Restores queued clips from the session state to the speaker's playback queue without LINQ allocation.
 ```csharp
 public static int RestoreQueue(this ISpeaker speaker, SpeakerState state, AudioCache audioCache)
 ```
 
-### 🔹 `ClearQueue()`
-**Description:** Clears the playback queue for the specified physical speaker.
-```csharp
-public static bool ClearQueue(this ISpeaker speaker, SpeakerState state = null)
-```
-
 ### 🔹 `static()`
-**Description:** Retrieves the current queue status for the specified physical speaker.
+**Description:** Retrieves the current queue status safely with zero allocation.
 ```csharp
 public static (int queuedCount, string currentClip) GetQueueStatus(this ISpeaker speaker, SpeakerState state = null)
-```
-
-### 🔹 `ValidateState()`
-**Description:** Validates the abstract session state for consistency and correctness.
-```csharp
-public static bool ValidateState(this SpeakerState state)
-```
-
-### 🔹 `StartAutoStop()`
-**Description:** Initiates a coroutine that automatically stops and fades out the physical speaker after a set lifespan.
-```csharp
-public static void StartAutoStop(this ISpeaker speaker, byte controllerId, float lifespan, bool autoCleanup, Action<byte> fadeOutAction)
 ```
 
 ---
