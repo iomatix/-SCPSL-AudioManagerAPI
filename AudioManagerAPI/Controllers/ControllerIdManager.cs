@@ -91,7 +91,7 @@
                     activeControllers[controllerId] = sessionId;
                     activeSessions[sessionId] = session;
 
-                    Log.Debug($"[AudioManagerAPI] Session {sessionId} allocated controller ID {controllerId} with priority {priority} at {Timing.LocalTime}.");
+                    Log.Debug($" Session {sessionId} allocated controller ID {controllerId} with priority {priority} at {Timing.LocalTime}.");
                 }
                 else
                 {
@@ -99,7 +99,7 @@
                     if (state != null && state.Persistent)
                     {
                         activeSessions[sessionId] = session;
-                        Log.Debug($"[AudioManagerAPI] Session {sessionId} failed allocation but state saved (persistent) at {Timing.LocalTime}.");
+                        Log.Debug($" Session {sessionId} failed allocation but state saved (persistent) at {Timing.LocalTime}.");
                     }
                 }
             }
@@ -155,7 +155,7 @@
                 }
 
                 activeControllers.Remove(candidateId.Value);
-                Log.Debug($"[AudioManagerAPI] Evicted session {candidateSessionId.Value} from controller {candidateId.Value}.");
+                Log.Debug($" Evicted session {candidateSessionId.Value} from controller {candidateId.Value}.");
                 return candidateId.Value;
             }
 
@@ -185,7 +185,7 @@
                             activeSessions.Remove(sessionId);
                         }
                     }
-                    Log.Debug($"[AudioManagerAPI] Released controller ID {controllerId} (from session {sessionId}) at {Timing.LocalTime}.");
+                    Log.Debug($" Released controller ID {controllerId} (from session {sessionId}) at {Timing.LocalTime}.");
                 }
             }
         }
@@ -234,7 +234,7 @@
                         ReleaseController(session.CurrentControllerId.Value);
                     }
                     activeSessions.Remove(sessionId);
-                    Log.Debug($"[AudioManagerAPI] Destroyed session {sessionId}.");
+                    Log.Debug($" Destroyed session {sessionId}.");
                 }
             }
         }
@@ -259,7 +259,7 @@
 
                 nextSessionId = 1;
 
-                Log.Debug("[AudioManagerAPI] ControllerIdManager state has been fully reset.");
+                Log.Debug(" ControllerIdManager state has been fully reset.");
             }
         }
     }

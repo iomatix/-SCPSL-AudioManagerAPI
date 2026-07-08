@@ -100,7 +100,7 @@
             float[] samples = audioCache.Get(key);
             if (samples == null)
             {
-                Log.Warn($"[AudioManagerAPI] Audio with key {key} not found in cache registries.");
+                Log.Warn($" Audio with key {key} not found in cache registries.");
                 return 0;
             }
 
@@ -134,7 +134,7 @@
             // Deadlock Elimination: Calling TryAllocate detached from an outer lock destroys the A->B->A lock inversion matrix
             if (!ControllerIdManager.TryAllocate(priority, stopCallback, state, out allocatedSessionId, out byte controllerId))
             {
-                Log.Warn($"[AudioManagerAPI] Failed to initialize session for audio {key}.");
+                Log.Warn($" Failed to initialize session for audio {key}.");
                 return 0;
             }
 
@@ -366,13 +366,13 @@
             bool initialLoop,
             bool isQueued)
         {
-            Log.Debug($"[AudioManagerAPI] InitializePhysicalSpeaker: session={sessionId}, controllerId={controllerId}");
+            Log.Debug($" InitializePhysicalSpeaker: session={sessionId}, controllerId={controllerId}");
 
             ISpeaker speaker = speakerFactory.CreateSpeaker(state.Position, controllerId);
             if (speaker == null)
             {
                 ControllerIdManager.ReleaseController(controllerId);
-                Log.Warn($"[AudioManagerAPI] Failed to create physical speaker for session {sessionId} (Controller ID: {controllerId}).");
+                Log.Warn($" Failed to create physical speaker for session {sessionId} (Controller ID: {controllerId}).");
                 return;
             }
 
@@ -660,7 +660,7 @@
                 speakers.Clear();
                 ControllerIdManager.FullReset();
 
-                Log.Info("[AudioManagerAPI] All audio sessions and physical controllers have been cleaned up.");
+                Log.Info(" All audio sessions and physical controllers have been cleaned up.");
             }
         }
 
@@ -734,7 +734,7 @@
 
             if (!ControllerIdManager.TryAllocate(priority, stopCallback, state, out allocatedSessionId, out byte controllerId))
             {
-                Log.Warn("[AudioManagerAPI] Failed to initialize stream-only session.");
+                Log.Warn(" Failed to initialize stream-only session.");
                 return 0;
             }
 
@@ -763,7 +763,7 @@
             }
             catch (Exception ex)
             {
-                Log.Error("[AudioManagerAPI] Failed to initiate crossfade fadeout: " + ex.Message);
+                Log.Error(" Failed to initiate crossfade fadeout: " + ex.Message);
                 isCompleted = true;
             }
 
@@ -784,7 +784,7 @@
             }
             catch (Exception ex)
             {
-                Log.Error("[AudioManagerAPI] Error during deferred crossfade resource cleanup: " + ex.Message);
+                Log.Error(" Error during deferred crossfade resource cleanup: " + ex.Message);
             }
         }
     }

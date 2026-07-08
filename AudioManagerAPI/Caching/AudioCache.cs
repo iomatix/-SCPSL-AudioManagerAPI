@@ -61,7 +61,7 @@
                 }
                 catch (Exception ex)
                 {
-                    Logger.Error($"[AudioManagerAPI] Predictive background audio warmup failed for '{key}': {ex.Message}");
+                    Logger.Error($" Predictive background audio warmup failed for '{key}': {ex.Message}");
                 }
             });
         }
@@ -91,7 +91,7 @@
             }
             catch (Exception ex)
             {
-                Logger.Error($"[AudioManagerAPI] Failed to invoke stream provider for key '{key}': {ex.Message}");
+                Logger.Error($" Failed to invoke stream provider for key '{key}': {ex.Message}");
                 return null;
             }
 
@@ -126,7 +126,7 @@
                 // localized anonymous methods, and plugin references from enduring heap chains.
                 _streamProviders.Remove(lruKey);
 
-                Log.Debug($"[AudioManagerAPI] Evicted cached audio '{lruKey}' and released its stream provider from memory registry.");
+                Log.Debug($" Evicted cached audio '{lruKey}' and released its stream provider from memory registry.");
             }
 
             _cache[key] = samples;
@@ -165,7 +165,7 @@
             }
             catch (Exception ex)
             {
-                Logger.Error($"[AudioManagerAPI] Audio cache exception while loading '{key}': {ex.Message}");
+                Logger.Error($" Audio cache exception while loading '{key}': {ex.Message}");
                 return null;
             }
         }
@@ -296,7 +296,7 @@
                     return samples;
 
                 default:
-                    Logger.Warn($"[AudioManagerAPI] Unsupported WAV bit depth {bitsPerSample} for '{key}'.");
+                    Logger.Warn($" Unsupported WAV bit depth {bitsPerSample} for '{key}'.");
                     outLength = 0;
                     return null;
             }
