@@ -7,6 +7,7 @@
     using System.IO;
     using System.Text;
     using System.Threading;
+    using Logger = AudioManagerAPI.Logger.ApiLogger;
 
     /// <summary>
     /// Thread-safe audio sample cache implementing predictive background pre-decoding, 
@@ -110,6 +111,9 @@
             }
         }
 
+        /// <summary>
+        /// Inserts an item into memory maps and handles LRU tracking mechanics under lock safety.
+        /// </summary>
         private void CommitCacheInsertion(string key, float[] samples)
         {
             if (_cache.Count >= _maxSize)
@@ -117,7 +121,12 @@
                 var lruKey = _lruOrder.Last.Value;
                 _cache.Remove(lruKey);
                 _lruOrder.RemoveLast();
-                Logger.Debug($"[AudioManagerAPI] Evicted cached audio '{lruKey}' due to memory limits.");
+
+                // Explicitly remove the provider factory to release background closures,
+                // localized anonymous methods, and plugin references from enduring heap chains.
+                _streamProviders.Remove(lruKey);
+
+                Log.Debug($"[AudioManagerAPI] Evicted cached audio '{lruKey}' and released its stream provider from memory registry.");
             }
 
             _cache[key] = samples;
@@ -351,69 +360,38 @@
             return output;
         }
 
+        /// <summary>
+        /// Decodes MP3 streams utilizing the unified cross-platform pipeline with zero allocation overhead.
+        /// </summary>
         private float[] LoadMp3AsFloat(BinaryReader reader, string key)
         {
-            try
-            {
-                byte[] mp3Bytes = reader.ReadBytes((int)(reader.BaseStream.Length - reader.BaseStream.Position));
-                if (mp3Bytes.Length < 4) return null;
-
-                using (var mp3Stream = new MemoryStream(mp3Bytes))
-                using (var mp3Reader = new NAudio.Wave.Mp3FileReader(mp3Stream))
-                {
-                    var waveFormat = mp3Reader.WaveFormat;
-                    int channels = waveFormat.Channels;
-                    int sampleRate = waveFormat.SampleRate;
-
-                    using (var pcmStream = NAudio.Wave.WaveFormatConversionStream.CreatePcmStream(mp3Reader))
-                    using (var mem = new MemoryStream())
-                    {
-                        pcmStream.CopyTo(mem);
-                        byte[] pcmBytes = mem.ToArray();
-
-                        int sampleCount = pcmBytes.Length / 2;
-
-                        short[] pcm16 = ArrayPool<short>.Shared.Rent(sampleCount);
-                        Buffer.BlockCopy(pcmBytes, 0, pcm16, 0, pcmBytes.Length);
-
-                        int currentLength = sampleCount;
-                        float[] currentSamples = ArrayPool<float>.Shared.Rent(currentLength);
-
-                        const float inv = 1f / 32768f;
-                        for (int i = 0; i < currentLength; i++)
-                            currentSamples[i] = pcm16[i] * inv;
-
-                        ArrayPool<short>.Shared.Return(pcm16);
-
-                        if (channels > 1)
-                        {
-                            float[] monoSamples = DownmixToMonoRented(currentSamples, currentLength, channels, out int monoLength);
-                            ArrayPool<float>.Shared.Return(currentSamples);
-                            currentSamples = monoSamples;
-                            currentLength = monoLength;
-                        }
-
-                        if (sampleRate != TargetSampleRate)
-                        {
-                            float[] resampledSamples = ResampleLinearRented(currentSamples, currentLength, sampleRate, TargetSampleRate, out int resampledLength);
-                            ArrayPool<float>.Shared.Return(currentSamples);
-                            currentSamples = resampledSamples;
-                            currentLength = resampledLength;
-                        }
-
-                        float[] finalExactArray = new float[currentLength];
-                        Array.Copy(currentSamples, 0, finalExactArray, 0, currentLength);
-                        ArrayPool<float>.Shared.Return(currentSamples);
-
-                        return finalExactArray;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Error($"[AudioManagerAPI] MP3 decode exception for '{key}': {ex.Message}");
+            // DRY Unification: Hand off stream decoding responsibility entirely to the new cross-platform Mp3Decoder
+            float[] currentSamples = Decoders.Mp3Decoder.DecodeMp3ToFloatRented(reader.BaseStream, out int currentLength, out int sampleRate, out int channels);
+            if (currentSamples == null || currentLength == 0)
                 return null;
+
+            if (channels > 1)
+            {
+                float[] monoSamples = DownmixToMonoRented(currentSamples, currentLength, channels, out int monoLength);
+                ArrayPool<float>.Shared.Return(currentSamples);
+                currentSamples = monoSamples;
+                currentLength = monoLength;
             }
+
+            if (sampleRate != TargetSampleRate && sampleRate > 0)
+            {
+                float[] resampledSamples = ResampleLinearRented(currentSamples, currentLength, sampleRate, TargetSampleRate, out int resampledLength);
+                ArrayPool<float>.Shared.Return(currentSamples);
+                currentSamples = resampledSamples;
+                currentLength = resampledLength;
+            }
+
+            // Copy out precisely sized long-term payload for the cache architecture before returning transient buffer
+            float[] finalExactArray = new float[currentLength];
+            Array.Copy(currentSamples, 0, finalExactArray, 0, currentLength);
+            ArrayPool<float>.Shared.Return(currentSamples);
+
+            return finalExactArray;
         }
 
         private float[] LoadRawFloatPcm(BinaryReader reader, string key)
