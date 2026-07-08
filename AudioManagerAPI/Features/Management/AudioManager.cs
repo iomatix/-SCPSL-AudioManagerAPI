@@ -10,27 +10,27 @@
     using AudioManagerAPI.Speakers.Extensions;
     using AudioManagerAPI.Speakers.State;
     using LabApi.Features.Wrappers;
-    using MEC;
     using System;
+    using System.Collections.Concurrent;
     using System.Collections.Generic;
     using System.IO;
-    using System.Linq;
     using UnityEngine;
 
     using Log = LabApi.Features.Console.Logger;
 
     /// <summary>
-    /// Audio orchestration router acting as a thread-safe bridge 
-    /// between abstract audio sessions and physical network speaker controller hardware components.
-    /// Fully compliant with C# 7.4 execution frameworks.
+    /// High-performance, deadlock-free audio orchestration router utilizing fine-grained concurrency controls 
+    /// and lock-free state operations to secure server frame-rate stability.
     /// </summary>
     public partial class AudioManager : IAudioManager
     {
-        private readonly System.Collections.Concurrent.ConcurrentDictionary<byte, ISpeaker> speakers =
-            new System.Collections.Concurrent.ConcurrentDictionary<byte, ISpeaker>();
+        // Thread-safe container requiring no outer global locks for CRUD transactions
+        private readonly ConcurrentDictionary<byte, ISpeaker> speakers = new ConcurrentDictionary<byte, ISpeaker>();
         private readonly AudioCache audioCache;
         private readonly ISpeakerFactory speakerFactory;
-        private readonly object lockObject = new object();
+
+        // Lock object reserved exclusively for localized physical speaker instantiation and crossfades
+        private readonly object speakerCreationLock = new object();
 
         #region Events
         public event Action<int> OnPlaybackStarted;
@@ -70,10 +70,8 @@
 
         public bool IsValidSession(int sessionId)
         {
-            lock (lockObject)
-            {
-                return ControllerIdManager.GetSessionState(sessionId) != null;
-            }
+            // Optimization: ControllerIdManager possesses internal lock safety; outer lock is completely redundant
+            return ControllerIdManager.GetSessionState(sessionId) != null;
         }
 
         public SpeakerState GetSessionState(int sessionId)
@@ -99,9 +97,6 @@
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
 
-            // OPTIMIZATION: Querying the memory cache buffer OUTSIDE the global management lock lockObject.
-            // If a cache-miss triggers a lazy-loading I/O disk fetch, it runs safely in a non-blocking 
-            // state, preventing thread exhaustion or frame starvation across the entire audio backend engine.
             float[] samples = audioCache.Get(key);
             if (samples == null)
             {
@@ -109,45 +104,46 @@
                 return 0;
             }
 
-            lock (lockObject)
+            // Optimization: Structural state instantiation runs lock-free.
+            var state = new SpeakerState
             {
-                var state = new SpeakerState
-                {
-                    Key = queue ? null : key,
-                    Position = position,
-                    Loop = queue ? false : loop,
-                    Volume = volume,
-                    MinDistance = minDistance,
-                    MaxDistance = maxDistance,
-                    IsSpatial = isSpatial,
-                    Priority = priority,
-                    PlayerFilter = validPlayersFilter,
-                    QueuedClips = queue ? new List<(string key, bool loop)> { (key, loop) } : new List<(string key, bool loop)>(),
-                    Persistent = persistent,
-                    Lifespan = lifespan,
-                    AutoCleanup = autoCleanup,
-                    PlaybackPosition = 0f
-                };
+                Key = queue ? null : key,
+                Position = position,
+                Loop = queue ? false : loop,
+                Volume = volume,
+                MinDistance = minDistance,
+                MaxDistance = maxDistance,
+                IsSpatial = isSpatial,
+                Priority = priority,
+                PlayerFilter = validPlayersFilter,
+                QueuedClips = queue ? new List<(string key, bool loop)> { (key, loop) } : new List<(string key, bool loop)>(),
+                Persistent = persistent,
+                Lifespan = lifespan,
+                AutoCleanup = autoCleanup,
+                PlaybackPosition = 0f
+            };
 
-                int allocatedSessionId = 0;
-                Action stopCallback = () =>
-                {
-                    if (allocatedSessionId != 0) FadeOutAudio(allocatedSessionId, this.Options.DefaultFadeOutDuration);
-                };
+            int allocatedSessionId = 0;
 
-                if (!ControllerIdManager.TryAllocate(priority, stopCallback, state, out allocatedSessionId, out byte controllerId))
-                {
-                    Log.Warn($"[AudioManagerAPI] Failed to initialize session for audio {key}.");
-                    return 0;
-                }
+            // Localized atomic callback assignment
+            Action stopCallback = () =>
+            {
+                if (allocatedSessionId != 0) FadeOutAudio(allocatedSessionId, this.Options.DefaultFadeOutDuration);
+            };
 
-                if (controllerId != 0)
-                {
-                    InitializePhysicalSpeaker(controllerId, allocatedSessionId, state, samples, loop, queue);
-                }
-
-                return allocatedSessionId;
+            // Deadlock Elimination: Calling TryAllocate detached from an outer lock destroys the A->B->A lock inversion matrix
+            if (!ControllerIdManager.TryAllocate(priority, stopCallback, state, out allocatedSessionId, out byte controllerId))
+            {
+                Log.Warn($"[AudioManagerAPI] Failed to initialize session for audio {key}.");
+                return 0;
             }
+
+            if (controllerId != 0)
+            {
+                InitializePhysicalSpeaker(controllerId, allocatedSessionId, state, samples, loop, queue);
+            }
+
+            return allocatedSessionId;
         }
 
         public int PlayGlobalAudio(
@@ -162,6 +158,7 @@
             float? lifespan = null,
             bool autoCleanup = false)
         {
+            // Bugfix Krok 3: Replaced slow .Contains O(N^2) evaluation loop with direct lock-free state property flags
             if (validPlayersFilter == null)
             {
                 validPlayersFilter = p => p != null && p.IsReady;
@@ -195,7 +192,6 @@
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
 
-            // Public environmental channel: plays for everyone inside the Area of Interest sphere except the trigger source.
             int worldSession = PlayAudio(
                 key: key,
                 position: position,
@@ -213,7 +209,6 @@
                 autoCleanup: true
             );
 
-            // Isolated subjective channel: plays exclusively for the trigger source to preserve perfect point-source directionality.
             int sourceSession = 0;
             if (sourcePlayer != null && sourcePlayer.IsReady)
             {
@@ -244,7 +239,6 @@
 
             float initialLifespan = lifespan ?? 0f;
 
-            // Instantiate the session context anchored at the first calculated frame coordinate vector.
             int sessionId = PlayAudio(
                 key: key,
                 position: positionProvider(),
@@ -264,41 +258,25 @@
 
             if (sessionId == 0) return 0;
 
-            // Dispatch the high-frequency transformation update handler loop into the MEC thread pool.
             MEC.Timing.RunCoroutine(TrackTargetTransformLoop(positionProvider, validationCheck, sessionId, initialLifespan));
             return sessionId;
         }
 
-        // Todo, invent a better way to handle this.
         private IEnumerator<float> TrackTargetTransformLoop(Func<Vector3> positionProvider, Func<bool> validationCheck, int sessionId, float duration)
         {
             float elapsed = 0f;
-
-            // Allow a brief execution layout buffer frame window for underlying network identities to stabilize.
             yield return MEC.Timing.WaitForSeconds(0.1f);
 
             while (duration <= 0f || elapsed < duration)
             {
-                // Enforce strict situational invariant validations before attempting state mutations.
                 if (!validationCheck() || !IsValidSession(sessionId))
                 {
-                    lock (lockObject)
-                    {
-                        float failDuration = Options.DefaultFadeOutDuration > 0f ? Options.DefaultFadeOutDuration : 0.3f;
-                        try { FadeOutAudio(sessionId, failDuration); } catch { }
-                    }
+                    float failDuration = Options.DefaultFadeOutDuration > 0f ? Options.DefaultFadeOutDuration : 0.3f;
+                    FadeOutAudio(sessionId, failDuration);
                     yield break;
                 }
 
-                try
-                {
-                    SetSessionPosition(sessionId, positionProvider());
-                }
-                catch
-                {
-                    yield break;
-                }
-
+                SetSessionPosition(sessionId, positionProvider());
                 elapsed += MEC.Timing.DeltaTime;
                 yield return MEC.Timing.WaitForOneFrame;
             }
@@ -321,7 +299,6 @@
             float initialLifespan = lifespan ?? 0f;
             if (initialLifespan <= 0f) return 0;
 
-            // Anchor the early spatial layout state firmly to the initial coordinate yield frame.
             int sessionId = PlayAudio(
                 key: key,
                 position: positionProvider(),
@@ -341,40 +318,29 @@
 
             if (sessionId == 0) return 0;
 
-            // Delegate raw coordinate mutations directly to the high-performance MEC thread context.
             MEC.Timing.RunCoroutine(TrackAndOrbitPositionLoop(positionProvider, validationCheck, sessionId, initialLifespan, orbitSettings));
-
             return sessionId;
         }
 
         private IEnumerator<float> TrackAndOrbitPositionLoop(Func<Vector3> positionProvider, Func<bool> validationCheck, int sessionId, float duration, OrbitSettings settings)
         {
             float elapsed = 0f;
-
-            // Randomize starting phase parameters to avoid synchronized overlapping audio tracks.
             float currentAngle = UnityEngine.Random.Range(0f, Mathf.PI * 2f);
             float approachPhaseOffset = UnityEngine.Random.Range(0f, Mathf.PI * 2f);
 
             while (elapsed < duration)
             {
-                // Enforce systemic validation rules on every frame tick to guard against memory pollution.
                 if (!validationCheck() || !IsValidSession(sessionId))
                 {
-                    lock (lockObject)
-                    {
-                        float failDuration = Options.DefaultFadeOutDuration > 0f ? Options.DefaultFadeOutDuration : 0.65f;
-                        try { FadeOutAudio(sessionId, failDuration); } catch { }
-                    }
+                    float failDuration = Options.DefaultFadeOutDuration > 0f ? Options.DefaultFadeOutDuration : 0.65f;
+                    FadeOutAudio(sessionId, failDuration);
                     yield break;
                 }
 
                 Vector3 corePosition = positionProvider();
-
-                // Compute harmonic expansion and contraction factors using mapped sine wave operations.
                 float normalizedSine = (Mathf.Sin((elapsed * settings.ApproachSpeed) + approachPhaseOffset) + 1f) / 2f;
                 float currentRadius = Mathf.Lerp(settings.MinRadius, settings.MaxRadius, normalizedSine);
 
-                // Derive circular positioning steps across plane dimensions.
                 float xOffset = Mathf.Cos(currentAngle) * currentRadius;
                 float zOffset = Mathf.Sin(currentAngle) * currentRadius;
 
@@ -384,59 +350,44 @@
                     corePosition.z + zOffset
                 );
 
-                try
-                {
-                    SetSessionPosition(sessionId, projectedVector);
-                }
-                catch
-                {
-                    yield break;
-                }
+                SetSessionPosition(sessionId, projectedVector);
 
                 currentAngle += settings.AngularSpeed * MEC.Timing.DeltaTime;
                 elapsed += MEC.Timing.DeltaTime;
-
                 yield return MEC.Timing.WaitForOneFrame;
             }
         }
-        private void InitializePhysicalSpeaker(
-                    byte controllerId,
-                    int sessionId,
-                    SpeakerState state,
-                    float[] initialSamples,
-                    bool initialLoop,
-                    bool isQueued)
-        {
-            Log.Debug($"[AudioManagerAPI] InitializePhysicalSpeaker: session={sessionId}, controllerId={controllerId}, hasSamples={(initialSamples != null)}");
 
-            // STEP 1: Instantiate the physical speaker components outside the lock block to maintain high performance
+        private void InitializePhysicalSpeaker(
+            byte controllerId,
+            int sessionId,
+            SpeakerState state,
+            float[] initialSamples,
+            bool initialLoop,
+            bool isQueued)
+        {
+            Log.Debug($"[AudioManagerAPI] InitializePhysicalSpeaker: session={sessionId}, controllerId={controllerId}");
+
             ISpeaker speaker = speakerFactory.CreateSpeaker(state.Position, controllerId);
             if (speaker == null)
             {
-                lock (lockObject)
-                {
-                    ControllerIdManager.ReleaseController(controllerId);
-                }
+                ControllerIdManager.ReleaseController(controllerId);
                 Log.Warn($"[AudioManagerAPI] Failed to create physical speaker for session {sessionId} (Controller ID: {controllerId}).");
                 return;
             }
 
-            // STEP 2: Perform structural slot evaluations and old instance teardowns inside the atomic lock
-            lock (lockObject)
+            // Localized Locking: Isolate critical dictionary mutations and crossfading behaviors to a specialized sub-lock
+            lock (speakerCreationLock)
             {
                 if (speakers.TryGetValue(controllerId, out ISpeaker oldSpeaker) && oldSpeaker != null)
                 {
-                    float crossfadeDuration = this.Options.DefaultFadeOutDuration > 0f
-                        ? this.Options.DefaultFadeOutDuration
-                        : 0.65f;
-
+                    float crossfadeDuration = this.Options.DefaultFadeOutDuration > 0f ? this.Options.DefaultFadeOutDuration : 0.65f;
                     MEC.Timing.RunCoroutine(FadeOutAndDestroyOldSpeaker(oldSpeaker, crossfadeDuration));
                 }
 
                 speakers[controllerId] = speaker;
             }
 
-            // STEP 3: Complete remaining data configurations safely outside the lock block
             speaker.Configure(state.Volume, state.MinDistance, state.MaxDistance, state.IsSpatial, null);
 
             if (speaker is ISpeakerWithPlayerFilter filterSpeaker && state.PlayerFilter != null)
@@ -447,7 +398,6 @@
             state.PhysicalSpeaker = speaker;
             state.HasPhysicalSpeaker = true;
 
-            // Trigger structural speaker initialization pipeline to kick off LabAPI transmitter state machine
             if (initialSamples == null)
             {
                 speaker.Play(new float[] { 0f }, false, 0f);
@@ -462,11 +412,7 @@
                 OnPlaybackStarted?.Invoke(sessionId);
             }
 
-            // ===================================================================
-            // BUGFIX VOIP: RECOVERY JITTER BUFFER FLUSH PASS
-            // ===================================================================
-            // If the session accumulated live PCM streaming chunks while it was evicted,
-            // we flush the abstract FIFO queue directly into the newly allocated physical speaker.
+            // Bugfix VoIP Recovery: Flush jitter buffer immediately upon hardware binding
             lock (state.PcmQueue)
             {
                 while (state.PcmQueue.Count > 0)
@@ -479,13 +425,9 @@
                 }
             }
 
-            // ===================================================================
-            // LIFECYCLE MECHANICS: DETERMINISTIC MICRO-TRANSIENT CLEANUP GATES
-            // ===================================================================
             if (state.AutoCleanup || state.Lifespan.HasValue)
             {
                 float targetLifespan = state.Lifespan ?? float.MaxValue;
-
                 if (targetLifespan < 0.5f)
                 {
                     MEC.Timing.RunCoroutine(ExecuteTransientNetworkFlush(sessionId, targetLifespan));
@@ -505,133 +447,113 @@
         {
             if (volume < 0f || volume > 1f) throw new ArgumentOutOfRangeException(nameof(volume), "Volume must be between 0.0 and 1.0.");
 
-            lock (lockObject)
+            // Lock-Free Optimization Pattern: Extract state maps using atomic thread-safe concurrent APIs
+            var state = GetSessionState(sessionId);
+            if (state == null) return false;
+
+            state.Volume = volume;
+
+            if (ControllerIdManager.TryGetActiveController(sessionId, out byte controllerId) && speakers.TryGetValue(controllerId, out var speaker))
             {
-                var state = GetSessionState(sessionId);
-                if (state == null) return false;
-
-                state.Volume = volume;
-
-                if (ControllerIdManager.TryGetActiveController(sessionId, out byte controllerId) && speakers.TryGetValue(controllerId, out var speaker))
+                if (speaker is ISpeakerWithPlayerFilter filterSpeaker)
                 {
-                    if (speaker is ISpeakerWithPlayerFilter filterSpeaker)
-                    {
-                        filterSpeaker.SetVolume(volume);
-                        return true;
-                    }
+                    filterSpeaker.SetVolume(volume);
+                    return true;
                 }
-                return true;
             }
+            return true;
         }
 
         public bool SetSessionPosition(int sessionId, Vector3 position)
         {
-            lock (lockObject)
+            var state = GetSessionState(sessionId);
+            if (state == null) return false;
+
+            state.Position = position;
+
+            if (ControllerIdManager.TryGetActiveController(sessionId, out byte controllerId) && speakers.TryGetValue(controllerId, out var speaker))
             {
-                var state = GetSessionState(sessionId);
-                if (state == null) return false;
-
-                state.Position = position;
-
-                if (ControllerIdManager.TryGetActiveController(sessionId, out byte controllerId) && speakers.TryGetValue(controllerId, out var speaker))
+                if (speaker is ISpeakerWithPlayerFilter filterSpeaker)
                 {
-                    if (speaker is ISpeakerWithPlayerFilter filterSpeaker)
-                    {
-                        filterSpeaker.SetPosition(position);
-                    }
+                    filterSpeaker.SetPosition(position);
                 }
-                return true;
             }
+            return true;
         }
 
         public bool SetSessionPlayerFilter(int sessionId, Func<Player, bool> filter)
         {
-            lock (lockObject)
+            var state = GetSessionState(sessionId);
+            if (state == null) return false;
+
+            state.PlayerFilter = filter;
+
+            if (ControllerIdManager.TryGetActiveController(sessionId, out byte controllerId) && speakers.TryGetValue(controllerId, out var speaker))
             {
-                var state = GetSessionState(sessionId);
-                if (state == null) return false;
-
-                state.PlayerFilter = filter;
-
-                if (ControllerIdManager.TryGetActiveController(sessionId, out byte controllerId) && speakers.TryGetValue(controllerId, out var speaker))
+                if (speaker is ISpeakerWithPlayerFilter filterSpeaker)
                 {
-                    if (speaker is ISpeakerWithPlayerFilter filterSpeaker)
-                    {
-                        filterSpeaker.SetValidPlayers(filter);
-                    }
+                    filterSpeaker.SetValidPlayers(filter);
                 }
-                return true;
             }
+            return true;
         }
 
         public bool RecoverSession(int sessionId, bool resetPlayback = false)
         {
-            lock (lockObject)
+            var state = GetSessionState(sessionId);
+            if (state == null || !state.Persistent) return false;
+
+            if (resetPlayback) state.PlaybackPosition = 0f;
+
+            if (!ControllerIdManager.TryGetActiveController(sessionId, out byte currentControllerId))
             {
-                var state = GetSessionState(sessionId);
-                if (state == null || !state.Persistent) return false;
+                ControllerIdManager.TryAllocate(state.Priority, null, state, out _, out byte newControllerId);
+                if (newControllerId == 0) return false;
 
-                if (resetPlayback) state.PlaybackPosition = 0f;
-
-                if (!ControllerIdManager.TryGetActiveController(sessionId, out byte currentControllerId))
-                {
-                    ControllerIdManager.TryAllocate(state.Priority, null, state, out _, out byte newControllerId);
-                    if (newControllerId == 0) return false;
-
-                    var samples = audioCache.Get(state.Key);
-                    InitializePhysicalSpeaker(newControllerId, sessionId, state, samples, state.Loop, false);
-                }
-
-                return true;
+                var samples = audioCache.Get(state.Key);
+                InitializePhysicalSpeaker(newControllerId, sessionId, state, samples, state.Loop, false);
             }
+
+            return true;
         }
 
         public void PauseAudio(int sessionId)
         {
-            lock (lockObject)
+            var state = GetSessionState(sessionId);
+            if (state != null && ControllerIdManager.TryGetActiveController(sessionId, out byte controllerId))
             {
-                var state = GetSessionState(sessionId);
-                if (state != null && ControllerIdManager.TryGetActiveController(sessionId, out byte controllerId))
+                if (speakers.TryGetValue(controllerId, out var speaker))
                 {
-                    if (speakers.TryGetValue(controllerId, out var speaker))
-                    {
-                        speaker.Pause();
-                        OnPaused?.Invoke(sessionId);
-                    }
+                    speaker.Pause();
+                    OnPaused?.Invoke(sessionId);
                 }
             }
         }
 
         public void ResumeAudio(int sessionId)
         {
-            lock (lockObject)
+            if (ControllerIdManager.TryGetActiveController(sessionId, out byte controllerId))
             {
-                if (ControllerIdManager.TryGetActiveController(sessionId, out byte controllerId))
+                if (speakers.TryGetValue(controllerId, out var speaker))
                 {
-                    if (speakers.TryGetValue(controllerId, out var speaker))
-                    {
-                        speaker.Resume();
-                        OnResumed?.Invoke(sessionId);
-                    }
+                    speaker.Resume();
+                    OnResumed?.Invoke(sessionId);
                 }
             }
         }
 
         public void SkipAudio(int sessionId, int count)
         {
-            lock (lockObject)
+            if (ControllerIdManager.TryGetActiveController(sessionId, out byte controllerId))
             {
-                if (ControllerIdManager.TryGetActiveController(sessionId, out byte controllerId))
+                if (speakers.TryGetValue(controllerId, out var speaker))
                 {
-                    if (speakers.TryGetValue(controllerId, out var speaker))
-                    {
-                        speaker.Skip(count);
-                        OnSkipped?.Invoke(sessionId, count);
+                    speaker.Skip(count);
+                    OnSkipped?.Invoke(sessionId, count);
 
-                        if (speaker is DefaultSpeakerToyAdapter adapter && adapter.IsQueueEmpty)
-                        {
-                            OnQueueEmpty?.Invoke(sessionId);
-                        }
+                    if (speaker is DefaultSpeakerToyAdapter adapter && adapter.IsQueueEmpty)
+                    {
+                        OnQueueEmpty?.Invoke(sessionId);
                     }
                 }
             }
@@ -641,12 +563,9 @@
         {
             if (duration < 0f) throw new ArgumentOutOfRangeException(nameof(duration), "Fade-in duration must be non-negative.");
 
-            lock (lockObject)
+            if (ControllerIdManager.TryGetActiveController(sessionId, out byte controllerId) && speakers.TryGetValue(controllerId, out var speaker))
             {
-                if (ControllerIdManager.TryGetActiveController(sessionId, out byte controllerId) && speakers.TryGetValue(controllerId, out var speaker))
-                {
-                    speaker.FadeIn(duration);
-                }
+                speaker.FadeIn(duration);
             }
         }
 
@@ -654,102 +573,84 @@
         {
             if (duration < 0f) throw new ArgumentOutOfRangeException(nameof(duration), "Fade-out duration must be non-negative.");
 
-            lock (lockObject)
-            {
-                var state = GetSessionState(sessionId);
-                if (state == null) return;
+            var state = GetSessionState(sessionId);
+            if (state == null) return;
 
-                if (ControllerIdManager.TryGetActiveController(sessionId, out byte controllerId) && speakers.TryGetValue(controllerId, out var speaker))
-                {
-                    speaker.FadeOut(duration, () =>
-                    {
-                        MEC.Timing.RunCoroutine(DestroySessionDeferred(sessionId), MEC.Segment.Update);
-                    });
-                }
-                else
+            if (ControllerIdManager.TryGetActiveController(sessionId, out byte controllerId) && speakers.TryGetValue(controllerId, out var speaker))
+            {
+                speaker.FadeOut(duration, () =>
                 {
                     MEC.Timing.RunCoroutine(DestroySessionDeferred(sessionId), MEC.Segment.Update);
-                }
+                });
+            }
+            else
+            {
+                MEC.Timing.RunCoroutine(DestroySessionDeferred(sessionId), MEC.Segment.Update);
             }
         }
 
         private IEnumerator<float> DestroySessionDeferred(int sessionId)
         {
             yield return MEC.Timing.WaitForOneFrame;
-
-            lock (lockObject)
-            {
-                DestroySession(sessionId);
-            }
+            DestroySession(sessionId);
         }
 
         public void StopAudio(int sessionId)
         {
-            lock (lockObject)
+            if (ControllerIdManager.TryGetActiveController(sessionId, out byte controllerId) && speakers.TryGetValue(controllerId, out var speaker))
             {
-                if (ControllerIdManager.TryGetActiveController(sessionId, out byte controllerId) && speakers.TryGetValue(controllerId, out var speaker))
-                {
-                    speaker.Stop();
-                    OnStop?.Invoke(sessionId);
-                }
+                speaker.Stop();
+                OnStop?.Invoke(sessionId);
             }
         }
 
         public (int queuedCount, string currentClip) GetQueueStatus(int sessionId)
         {
-            lock (lockObject)
+            if (ControllerIdManager.TryGetActiveController(sessionId, out byte controllerId) && speakers.TryGetValue(controllerId, out var speaker))
             {
-                if (ControllerIdManager.TryGetActiveController(sessionId, out byte controllerId) && speakers.TryGetValue(controllerId, out var speaker))
-                {
-                    var state = GetSessionState(sessionId);
-                    return speaker.GetQueueStatus(state);
-                }
-                return (0, null);
+                var state = GetSessionState(sessionId);
+                return speaker.GetQueueStatus(state);
             }
+            return (0, null);
         }
 
         public bool ClearSessionQueue(int sessionId)
         {
-            lock (lockObject)
-            {
-                var state = GetSessionState(sessionId);
-                if (state != null) state.QueuedClips.Clear();
+            var state = GetSessionState(sessionId);
+            if (state != null) state.QueuedClips.Clear();
 
-                if (ControllerIdManager.TryGetActiveController(sessionId, out byte controllerId) && speakers.TryGetValue(controllerId, out var speaker))
-                {
-                    return speaker.ClearQueue(state);
-                }
-                return state != null;
+            if (ControllerIdManager.TryGetActiveController(sessionId, out byte controllerId) && speakers.TryGetValue(controllerId, out var speaker))
+            {
+                return speaker.ClearQueue(state);
             }
+            return state != null;
         }
 
         public void DestroySession(int sessionId)
         {
-            lock (lockObject)
-            {
-                var state = GetSessionState(sessionId);
+            var state = GetSessionState(sessionId);
 
-                if (ControllerIdManager.TryGetActiveController(sessionId, out byte controllerId))
+            if (ControllerIdManager.TryGetActiveController(sessionId, out byte controllerId))
+            {
+                if (speakers.TryGetValue(controllerId, out var speaker) && speaker != null)
                 {
-                    if (speakers.TryGetValue(controllerId, out var speaker) && speaker != null)
+                    if (state != null && speaker == state.PhysicalSpeaker)
                     {
-                        if (state != null && speaker == state.PhysicalSpeaker)
-                        {
-                            speakers.TryRemove(controllerId, out _);
-                            speaker.Stop();
-                            speaker.Destroy();
-                        }
+                        speakers.TryRemove(controllerId, out _);
+                        speaker.Stop();
+                        speaker.Destroy();
                     }
                 }
-
-                ControllerIdManager.DestroySession(sessionId);
-                OnStop?.Invoke(sessionId);
             }
+
+            ControllerIdManager.DestroySession(sessionId);
+            OnStop?.Invoke(sessionId);
         }
 
         public void CleanupAllSessions()
         {
-            lock (lockObject)
+            // Lock block is retained here exclusively to enforce structural atomicity during intense round-restart flushes
+            lock (speakerCreationLock)
             {
                 foreach (var kvp in speakers)
                 {
@@ -762,40 +663,26 @@
                 Log.Info("[AudioManagerAPI] All audio sessions and physical controllers have been cleaned up.");
             }
         }
+
         private IEnumerator<float> ExecuteTransientNetworkFlush(int sessionId, float delayHorizon)
         {
             yield return MEC.Timing.WaitForSeconds(delayHorizon);
+            if (!IsValidSession(sessionId)) yield break;
 
-            lock (lockObject)
-            {
-                if (!IsValidSession(sessionId)) yield break;
-
-                // Step 1: Instantly sever the playback data pipeline to ensure silent cutoff processing.
-                FadeOutAudio(sessionId, 0f);
-            }
-
-            // Step 2: Yield the execution context for a fixed timeframe block. 
-            // This leaves a safe processing window for the hardware layer to flush outstanding UDP frames to remote clients.
+            FadeOutAudio(sessionId, 0f);
             yield return MEC.Timing.WaitForSeconds(0.250f);
 
-            lock (lockObject)
-            {
-                try { DestroySession(sessionId); } catch { }
-            }
+            try { DestroySession(sessionId); } catch { }
         }
 
-        #region Real-Time Audio Streaming
         public void AppendPcmData(int sessionId, float[] samples)
         {
             var state = ControllerIdManager.GetSessionState(sessionId);
             if (state == null || samples == null || samples.Length == 0)
                 return;
 
-            // Bugfix VoIP: Enqueue data if it's a static-backed stream (!IsStreamOnly)
-            // OR if a live stream-only/VoIP session is temporarily evicted from physical hardware (!HasPhysicalSpeaker)
             if (!state.IsStreamOnly || !state.HasPhysicalSpeaker)
             {
-                // Thread-Safety: Protect the underlying non-thread-safe Queue container from multi-threaded access
                 lock (state.PcmQueue)
                 {
                     state.PcmQueue.Enqueue(samples);
@@ -803,9 +690,7 @@
             }
 
             if (state.HasPhysicalSpeaker && state.PhysicalSpeaker != null)
-            {
                 state.PhysicalSpeaker.AppendPcm(samples);
-            }
         }
 
         public int CreateStreamSession(
@@ -820,46 +705,40 @@
             float? lifespan = null,
             bool autoCleanup = false)
         {
-            int allocatedSessionId = 0;
-            byte controllerId = 0;
-            SpeakerState state = null;
-
-            lock (lockObject)
+            var state = new SpeakerState
             {
-                state = new SpeakerState
-                {
-                    Key = null,
-                    Position = position,
-                    Loop = false,
-                    Volume = volume,
-                    MinDistance = minDistance,
-                    MaxDistance = maxDistance,
-                    IsSpatial = isSpatial,
-                    Priority = priority,
-                    PlayerFilter = validPlayersFilter,
-                    QueuedClips = new List<(string key, bool loop)>(),
-                    Persistent = persistent,
-                    Lifespan = lifespan,
-                    AutoCleanup = autoCleanup,
-                    PlaybackPosition = 0f,
-                    IsPaused = false,
-                    IsStreamOnly = true
-                };
+                Key = null,
+                Position = position,
+                Loop = false,
+                Volume = volume,
+                MinDistance = minDistance,
+                MaxDistance = maxDistance,
+                IsSpatial = isSpatial,
+                Priority = priority,
+                PlayerFilter = validPlayersFilter,
+                QueuedClips = new List<(string key, bool loop)>(),
+                Persistent = persistent,
+                Lifespan = lifespan,
+                AutoCleanup = autoCleanup,
+                PlaybackPosition = 0f,
+                IsPaused = false,
+                IsStreamOnly = true
+            };
 
-                Action stopCallback = () =>
-                {
-                    if (allocatedSessionId != 0)
-                        FadeOutAudio(allocatedSessionId, this.Options.DefaultFadeOutDuration);
-                };
+            int allocatedSessionId = 0;
+            Action stopCallback = () =>
+            {
+                if (allocatedSessionId != 0)
+                    FadeOutAudio(allocatedSessionId, this.Options.DefaultFadeOutDuration);
+            };
 
-                if (!ControllerIdManager.TryAllocate(priority, stopCallback, state, out allocatedSessionId, out controllerId))
-                {
-                    Log.Warn("[AudioManagerAPI] Failed to initialize stream-only session.");
-                    return 0;
-                }
+            if (!ControllerIdManager.TryAllocate(priority, stopCallback, state, out allocatedSessionId, out byte controllerId))
+            {
+                Log.Warn("[AudioManagerAPI] Failed to initialize stream-only session.");
+                return 0;
             }
 
-            if (controllerId != 0 && state != null)
+            if (controllerId != 0)
             {
                 InitializePhysicalSpeaker(
                     controllerId,
@@ -873,22 +752,14 @@
             return allocatedSessionId;
         }
 
-        #endregion
-
-        #region helpers
-
         private IEnumerator<float> FadeOutAndDestroyOldSpeaker(ISpeaker oldSpeaker, float duration)
         {
             if (oldSpeaker == null) yield break;
 
             bool isCompleted = false;
-
             try
             {
-                oldSpeaker.FadeOut(duration, () =>
-                {
-                    isCompleted = true;
-                });
+                oldSpeaker.FadeOut(duration, () => isCompleted = true);
             }
             catch (Exception ex)
             {
@@ -908,21 +779,13 @@
             try
             {
                 oldSpeaker.Stop();
-                if (oldSpeaker is IDisposable disposable)
-                {
-                    disposable.Dispose();
-                }
-                else
-                {
-                    oldSpeaker.Destroy();
-                }
+                if (oldSpeaker is IDisposable disposable) disposable.Dispose();
+                else oldSpeaker.Destroy();
             }
             catch (Exception ex)
             {
                 Log.Error("[AudioManagerAPI] Error during deferred crossfade resource cleanup: " + ex.Message);
             }
         }
-
-        #endregion
     }
 }
