@@ -241,9 +241,7 @@
         }
 
         #region ISpeakerWithPlayerFilter Implementation
-        /// <summary>
-        /// Binds a legacy allocation-heavy player predicate loop to the hardware speaker context.
-        /// </summary>
+        [Obsolete("Use the state-passing overload SetValidPlayers(Func<Player, object, bool>, object) to prevent closure heap allocations.")]
         public void SetValidPlayers(Func<Player, bool> filter)
         {
             _legacyFilter = filter;

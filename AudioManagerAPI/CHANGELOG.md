@@ -1,6 +1,6 @@
 ﻿# SCPSL-AudioManagerAPI — Changelog
 
-## 🆕 Changelog — Version 2.4.1 — Zero-Allocation Generic State-Passing & Hot Path Isolation
+## 🆕 Changelog — Version 2.4.2 — Zero-Allocation Generic State-Passing & Hot Path Isolation
 
 ### Architectural Innovation (Generic Context State-Passing)
 
@@ -37,7 +37,7 @@ position,
 validPlayersFilter: player => player.IsReady && player.IsWithinRadius(position, maxDistance)
 );
 ```
-#### 2. Modern Approach (Version 2.4.1 — 100% Zero Allocation on Hot Path)
+#### 2. Modern Approach (Version 2.4.2 — 100% Zero Allocation on Hot Path)
 
 By passing a custom struct or class configuration profile as the state parameter, the filtering logic remains entirely static and clean of runtime memory footprints.
 ```csharp
@@ -68,7 +68,7 @@ validPlayersFilter: (player, state) => player.IsReady && player.IsWithinRadius(s
 
 ---
 
-## 1. Session Model Update: SpeakerState.cs
+### 1. Session Model Update: SpeakerState.cs
 
 Add these fields inside the SpeakerState class to hold the untyped state context reference and the compiled bridge delegate:
 
@@ -79,7 +79,7 @@ public Func<Player, bool object,> StatePlayerFilter { get; set; }
 
 ---
 
-## 2. Speaker Contract Extension: ISpeakerWithPlayerFilter.cs
+### 2. Speaker Contract Extension: ISpeakerWithPlayerFilter.cs
 
 ```csharp
 /// <summary>
@@ -104,7 +104,7 @@ public interface ISpeakerWithPlayerFilter
 
 ---
 
-## 3. Physical Layer Adaptation: DefaultSpeakerToyAdapter.cs
+### 3. Physical Layer Adaptation: DefaultSpeakerToyAdapter.cs
 
 ```csharp
 public class DefaultSpeakerToyAdapter : ISpeakerWithPlayerFilter
@@ -168,7 +168,7 @@ public class DefaultSpeakerToyAdapter : ISpeakerWithPlayerFilter
 
 ---
 
-## 4. Main Interface Contract Overloads: IAudioManager.cs
+### 4. Main Interface Contract Overloads: IAudioManager.cs
 
 ```csharp
 public partial interface IAudioManager
@@ -269,7 +269,7 @@ public partial interface IAudioManager
 
 ---
 
-## 5. Router Implementation & Core Overloads: AudioManager.cs
+### 5. Router Implementation & Core Overloads: AudioManager.cs
 
 ```csharp
 public partial class AudioManager : IAudioManager

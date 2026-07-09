@@ -13,10 +13,7 @@
         /// </summary>
         Func<Player, bool> ValidPlayers { get; set; }
 
-        /// <summary>
-        /// Binds a legacy allocation-heavy player predicate loop to the hardware speaker context.
-        /// </summary>
-        /// <param name="filter">The evaluation predicate executed per active client track.</param>
+        [Obsolete("Use the state-passing overload SetValidPlayers(Func<Player, object, bool>, object) to prevent closure heap allocations.")]
         void SetValidPlayers(Func<Player, bool> filter);
 
         /// <summary>

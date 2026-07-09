@@ -265,9 +265,9 @@ public void FadeOut(float duration, Action onComplete = null)
 ```
 
 ### 🔹 `SetValidPlayers()`
-**Description:** Sets the filter function for valid players. <example> <code> adapter.SetValidPlayers(p => Player.ReadyList.Contains(p)); </code> </example>
+**Description:** Binds an allocation-free generic state-passing filter context directly to the speaker evaluation loop execution matrix.
 ```csharp
-public void SetValidPlayers(Func<Player, bool> playerFilter)
+public void SetValidPlayers(Func<Player, object, bool> filter, object state)
 ```
 
 ### 🔹 `SetVolume()`
@@ -480,6 +480,18 @@ public AudioPriority Priority { get; set; }
 **Description:** An optional filter function to determine which players are valid listeners for playback. If provided, audio will only be transmitted to players that satisfy the condition.
 ```csharp
 public Func<Player, bool> PlayerFilter { get; set; }
+```
+
+### 🔹 `FilterState`
+**Description:** Stores the untyped reference to the custom state object used for allocation-free filtering.
+```csharp
+public object FilterState { get; set; }
+```
+
+### 🔹 `StatePlayerFilter`
+**Description:** Stores the compiled non-generic bridge delegate for state-passing evaluation loops.
+```csharp
+public Func<Player, object, bool> StatePlayerFilter { get; set; }
 ```
 
 ### 🔹 `UnknownMember()`

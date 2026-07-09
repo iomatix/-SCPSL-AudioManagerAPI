@@ -67,41 +67,11 @@
         /// </summary>
         SpeakerState GetSessionState(int sessionId);
 
-        /// <summary>
-        /// Plays spatial audio at a specified 3D position with distance-based attenuation.
-        /// </summary>
-        /// <returns>The session ID, or 0 if initialization fails.</returns>
-        int PlayAudio(
-            string key,
-            Vector3 position,
-            bool loop = false,
-            float volume = 1f,
-            float minDistance = 1f,
-            float maxDistance = 20f,
-            bool isSpatial = true,
-            AudioPriority priority = AudioPriority.Medium,
-            Func<Player, bool> validPlayersFilter = null,
-            bool queue = false,
-            float fadeInDuration = 0f,
-            bool persistent = false,
-            float? lifespan = null,
-            bool autoCleanup = false);
+        [Obsolete("This method causes heap allocations due to closures. Use the generic PlayAudio<TState> overload instead for a zero-allocation hot path.")]
+        int PlayAudio(string key, Vector3 position, bool loop = false, float volume = 1f, float minDistance = 1f, float maxDistance = 20f, bool isSpatial = true, AudioPriority priority = AudioPriority.Medium, Func<Player, bool> validPlayersFilter = null, bool queue = false, float fadeInDuration = 0f, bool persistent = false, float? lifespan = null, bool autoCleanup = false);
 
-        /// <summary>
-        /// Plays non-spatial audio globally, audible to all ready players (or filtered players).
-        /// </summary>
-        /// <returns>The session ID, or 0 if initialization fails.</returns>
-        int PlayGlobalAudio(
-            string key,
-            bool loop = false,
-            float volume = 1f,
-            AudioPriority priority = AudioPriority.Medium,
-            Func<Player, bool> validPlayersFilter = null,
-            bool queue = false,
-            float fadeInDuration = 0f,
-            bool persistent = false,
-            float? lifespan = null,
-            bool autoCleanup = false);
+        [Obsolete("This method causes heap allocations due to closures. Use the generic PlayGlobalAudio<TState> overload instead for a zero-allocation hot path.")]
+        int PlayGlobalAudio(string key, bool loop = false, float volume = 1f, AudioPriority priority = AudioPriority.Medium, Func<Player, bool> validPlayersFilter = null, bool queue = false, float fadeInDuration = 0f, bool persistent = false, float? lifespan = null, bool autoCleanup = false);
 
         /// <summary>
         /// Deploys a coordinated dual-channel spatial audio session that resolves ambient phasing artifacts.
@@ -118,37 +88,11 @@
             float minDistance = 1f,
             float maxDistance = 20f);
 
-        /// <summary>
-        /// Instantiates an automated spatial session that dynamically updates its acoustic panning vectors
-        /// by tracking a frame-by-frame coordinate generator loop.
-        /// </summary>
-        int PlayTrackingAudio(
-            string key,
-            Func<Vector3> positionProvider,
-            Func<bool> validationCheck,
-            AudioPriority priority = AudioPriority.Medium,
-            float? lifespan = null,
-            Func<Player, bool> targetPlayerFilter = null,
-            float volume = 1f,
-            float minDistance = 1f,
-            float maxDistance = 20f);
+        [Obsolete("This method causes heap allocations due to closures. Use the generic PlayTrackingAudio<TState> overload instead for a zero-allocation hot path.")]
+        int PlayTrackingAudio(string key, Func<Vector3> positionProvider, Func<bool> validationCheck, AudioPriority priority = AudioPriority.Medium, float? lifespan = null, Func<Player, bool> targetPlayerFilter = null, float volume = 1f, float minDistance = 1f, float maxDistance = 20f);
 
-
-        /// <summary>
-        /// Deploys a spatial audio session that dynamically orbits around a coordinate provider
-        /// using real-time trigonometric wave calculations defined by the provided orbit settings.
-        /// </summary>
-        int PlayOrbitingAudio(
-            string key,
-            Func<Vector3> positionProvider,
-            Func<bool> validationCheck,
-            float volume,
-            float minDistance,
-            float maxDistance,
-            OrbitSettings orbitSettings,
-            AudioPriority priority = AudioPriority.Medium,
-            float? lifespan = null,
-            Func<Player, bool> targetPlayerFilter = null);
+        [Obsolete("This method causes heap allocations due to closures. Use the generic PlayOrbitingAudio<TState> overload instead for a zero-allocation hot path.")]
+        int PlayOrbitingAudio(string key, Func<Vector3> positionProvider, Func<bool> validationCheck, float volume, float minDistance, float maxDistance, OrbitSettings orbitSettings, AudioPriority priority = AudioPriority.Medium, float? lifespan = null, Func<Player, bool> targetPlayerFilter = null);
 
         #region Allocation-Free Generic Audio Pipelines
 
@@ -273,36 +217,6 @@
             Func<Player, TState, bool> targetPlayerFilter,
             AudioPriority priority = AudioPriority.Medium,
             float? lifespan = null);
-
-        /// <summary>
-        /// Creates a new continuous audio streaming session at a specified 3D position, utilizing an allocation-free generic state player filter.
-        /// </summary>
-        /// <typeparam name="TState">The type of the state object passed to the filter calculation layer.</typeparam>
-        /// <param name="position">The targeted 3D vector coordinates for spatialized sound projection.</param>
-        /// <param name="isSpatial">Enforces spatial 3D virtualization matrices over standard mono/stereo signals.</param>
-        /// <param name="minDistance">The spatial boundary range within which attenuation processing remains static.</param>
-        /// <param name="maxDistance">The absolute spatial boundary cutoff point where acoustic energy falls to zero.</param>
-        /// <param name="volume">The linear scale volume gain modifier ranging from 0.0 to 1.0.</param>
-        /// <param name="state">The structural state context object reference passed down into the execution loop.</param>
-        /// <param name="validPlayersFilter">The allocation-free state-aware evaluation predicate executed per connected client.</param>
-        /// <param name="priority">The scheduling priority parameter defining allocation behaviors under hardware constraints.</param>
-        /// <param name="persistent">Enforces context persistence rules across server round lifecycle resets.</param>
-        /// <param name="lifespan">Optional execution timeline track limiting session lifespan prior to forced reclamation.</param>
-        /// <param name="autoCleanup">Enforces immediate destruction sequences upon streaming queue exhaustion.</param>
-        /// <returns>The allocated abstract session identifier tracking index, or 0 if initialization constraints fail.</returns>
-        int CreateStreamSession<TState>(
-            Vector3 position,
-            bool isSpatial,
-            float minDistance,
-            float maxDistance,
-            float volume,
-            TState state,
-            Func<Player, TState, bool> validPlayersFilter,
-            AudioPriority priority = AudioPriority.Medium,
-            bool persistent = false,
-            float? lifespan = null,
-            bool autoCleanup = false);
-
         #endregion
 
         /// <summary>
@@ -386,17 +300,34 @@
         /// </summary>
         void AppendPcmData(int sessionId, float[] samples);
 
+        [Obsolete("This method causes heap allocations due to closures. Use the generic CreateStreamSession<TState> overload instead for a zero-allocation hot path.")]
+        int CreateStreamSession(Vector3 position, bool isSpatial, float minDistance, float maxDistance, float volume, AudioPriority priority = AudioPriority.Medium, Func<Player, bool> validPlayersFilter = null, bool persistent = false, float? lifespan = null, bool autoCleanup = false);
+
         /// <summary>
-        /// Creates a new audio stream session at the specified 3D position.
+        /// Creates a new continuous audio streaming session at a specified 3D position, utilizing an allocation-free generic state player filter.
         /// </summary>
-        int CreateStreamSession(
+        /// <typeparam name="TState">The type of the state object passed to the filter calculation layer.</typeparam>
+        /// <param name="position">The targeted 3D vector coordinates for spatialized sound projection.</param>
+        /// <param name="isSpatial">Enforces spatial 3D virtualization matrices over standard mono/stereo signals.</param>
+        /// <param name="minDistance">The spatial boundary range within which attenuation processing remains static.</param>
+        /// <param name="maxDistance">The absolute spatial boundary cutoff point where acoustic energy falls to zero.</param>
+        /// <param name="volume">The linear scale volume gain modifier ranging from 0.0 to 1.0.</param>
+        /// <param name="state">The structural state context object reference passed down into the execution loop.</param>
+        /// <param name="validPlayersFilter">The allocation-free state-aware evaluation predicate executed per connected client.</param>
+        /// <param name="priority">The scheduling priority parameter defining allocation behaviors under hardware constraints.</param>
+        /// <param name="persistent">Enforces context persistence rules across server round lifecycle resets.</param>
+        /// <param name="lifespan">Optional execution timeline track limiting session lifespan prior to forced reclamation.</param>
+        /// <param name="autoCleanup">Enforces immediate destruction sequences upon streaming queue exhaustion.</param>
+        /// <returns>The allocated abstract session identifier tracking index, or 0 if initialization constraints fail.</returns>
+        int CreateStreamSession<TState>(
             Vector3 position,
             bool isSpatial,
             float minDistance,
             float maxDistance,
             float volume,
+            TState state,
+            Func<Player, TState, bool> validPlayersFilter,
             AudioPriority priority = AudioPriority.Medium,
-            Func<Player, bool> validPlayersFilter = null,
             bool persistent = false,
             float? lifespan = null,
             bool autoCleanup = false);
