@@ -188,20 +188,131 @@
             return sessionId;
         }
 
+        public int PlayAudio<TState>(
+                    string key,
+                    Vector3 position,
+                    TState state,
+                    Func<Player, TState, bool> validPlayersFilter,
+                    bool loop = false,
+                    float volume = 1f,
+                    float minDistance = 1f,
+                    float maxDistance = 20f,
+                    bool isSpatial = true,
+                    AudioPriority priority = AudioPriority.Medium,
+                    bool queue = false,
+                    float fadeInDuration = 0f,
+                    bool persistent = false,
+                    float? lifespan = null,
+                    bool autoCleanup = false)
+        {
+            if (key == null) throw new ArgumentNullException(nameof(key));
+            if (validPlayersFilter == null) throw new ArgumentNullException(nameof(validPlayersFilter));
+
+            float[] samples = audioCache.Get(key);
+            if (samples == null)
+            {
+                Log.Warn($"Audio with key {key} not found in cache registries.");
+                return 0;
+            }
+
+            // High-Performance Bridge: Encapsulate generic state variables into the native layout allocation
+            var speakerState = new SpeakerState
+            {
+                Key = queue ? null : key,
+                Position = position,
+                Loop = queue ? false : loop,
+                Volume = volume,
+                MinDistance = minDistance,
+                MaxDistance = maxDistance,
+                IsSpatial = isSpatial,
+                Priority = priority,
+                Persistent = persistent,
+                Lifespan = lifespan,
+                AutoCleanup = autoCleanup,
+                PlaybackPosition = 0f,
+                QueuedClips = queue ? new List<(string key, bool loop)> { (key, loop) } : new List<(string key, bool loop)>(),
+
+                // State Binding (Zero Heap Inflation)
+                FilterState = state,
+                StatePlayerFilter = (player, untypedState) => validPlayersFilter(player, (TState)untypedState)
+            };
+
+            int allocatedSessionId = 0;
+            Action stopCallback = () =>
+            {
+                if (allocatedSessionId != 0) FadeOutAudio(allocatedSessionId, this.Options.DefaultFadeOutDuration);
+            };
+
+            if (!ControllerIdManager.TryAllocate(priority, stopCallback, speakerState, out allocatedSessionId, out byte controllerId))
+            {
+                Log.Warn($"Failed to initialize state-passing session for audio {key}.");
+                return 0;
+            }
+
+            if (controllerId != 0)
+            {
+                InitializePhysicalSpeaker(controllerId, allocatedSessionId, speakerState, samples, loop, queue);
+            }
+
+            return allocatedSessionId;
+        }
+
+        public int PlayGlobalAudio<TState>(
+            string key,
+            TState state,
+            Func<Player, TState, bool> validPlayersFilter,
+            bool loop = false,
+            float volume = 1f,
+            AudioPriority priority = AudioPriority.Medium,
+            bool queue = false,
+            float fadeInDuration = 0f,
+            bool persistent = false,
+            float? lifespan = null,
+            bool autoCleanup = false)
+        {
+            if (validPlayersFilter == null) throw new ArgumentNullException(nameof(validPlayersFilter));
+
+            int sessionId = PlayAudio(
+                key: key,
+                position: Vector3.zero,
+                state: state,
+                validPlayersFilter: validPlayersFilter,
+                loop: loop,
+                volume: volume,
+                minDistance: 0f,
+                maxDistance: 999.99f,
+                isSpatial: false,
+                priority: priority,
+                queue: queue,
+                fadeInDuration: fadeInDuration,
+                persistent: persistent,
+                lifespan: lifespan,
+                autoCleanup: autoCleanup);
+
+            if (sessionId != 0 && fadeInDuration > 0)
+            {
+                FadeInAudio(sessionId, fadeInDuration);
+            }
+
+            return sessionId;
+        }
+
         public (int worldSessionId, int sourceSessionId) PlaySpatialSmart(string key, Vector3 position, Player sourcePlayer, AudioPriority priority = AudioPriority.Medium, float? lifespan = null, float volume = 1f, float minDistance = 1f, float maxDistance = 20f)
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
 
+            // Internally leveraging the new generic PlayAudio to bypass closure allocations
             int worldSession = PlayAudio(
                 key: key,
                 position: position,
+                state: sourcePlayer,
+                validPlayersFilter: (p, src) => p != null && p.IsReady && (src == null || p.UserId != src.UserId),
                 loop: false,
                 volume: volume,
                 minDistance: minDistance,
                 maxDistance: maxDistance,
                 isSpatial: true,
                 priority: priority,
-                validPlayersFilter: p => p != null && p.IsReady && (sourcePlayer == null || p.UserId != sourcePlayer.UserId),
                 queue: false,
                 fadeInDuration: 0f,
                 persistent: false,
@@ -215,13 +326,14 @@
                 sourceSession = PlayAudio(
                     key: key,
                     position: position,
+                    state: sourcePlayer,
+                    validPlayersFilter: (p, src) => p != null && p.UserId == src.UserId,
                     loop: false,
                     volume: volume,
                     minDistance: minDistance,
                     maxDistance: maxDistance,
                     isSpatial: true,
                     priority: priority,
-                    validPlayersFilter: p => p != null && p.UserId == sourcePlayer.UserId,
                     queue: false,
                     fadeInDuration: 0f,
                     persistent: false,
@@ -259,6 +371,92 @@
             if (sessionId == 0) return 0;
 
             MEC.Timing.RunCoroutine(TrackTargetTransformLoop(positionProvider, validationCheck, sessionId, initialLifespan));
+            return sessionId;
+        }
+
+        public int PlayTrackingAudio<TState>(
+                    string key,
+                    Func<Vector3> positionProvider,
+                    Func<bool> validationCheck,
+                    TState state,
+                    Func<Player, TState, bool> targetPlayerFilter,
+                    AudioPriority priority = AudioPriority.Medium,
+                    float? lifespan = null,
+                    float volume = 1f,
+                    float minDistance = 1f,
+                    float maxDistance = 20f)
+        {
+            if (positionProvider == null || validationCheck == null || !validationCheck()) return 0;
+
+            float initialLifespan = lifespan ?? 0f;
+
+            // Delegate instantiation directly to the zero-allocation PlayAudio pipeline
+            int sessionId = PlayAudio(
+                key: key,
+                position: positionProvider(),
+                state: state,
+                validPlayersFilter: targetPlayerFilter,
+                loop: false,
+                volume: volume,
+                minDistance: minDistance,
+                maxDistance: maxDistance,
+                isSpatial: true,
+                priority: priority,
+                queue: false,
+                fadeInDuration: 0f,
+                persistent: false,
+                lifespan: lifespan,
+                autoCleanup: true
+            );
+
+            if (sessionId == 0) return 0;
+
+            // Reuse the existing frame-by-frame coordinate tracking loop safely
+            MEC.Timing.RunCoroutine(TrackTargetTransformLoop(positionProvider, validationCheck, sessionId, initialLifespan));
+            return sessionId;
+        }
+
+        public int PlayOrbitingAudio<TState>(
+            string key,
+            Func<Vector3> positionProvider,
+            Func<bool> validationCheck,
+            float volume,
+            float minDistance,
+            float maxDistance,
+            OrbitSettings orbitSettings,
+            TState state,
+            Func<Player, TState, bool> targetPlayerFilter,
+            AudioPriority priority = AudioPriority.Medium,
+            float? lifespan = null)
+        {
+            if (positionProvider == null || validationCheck == null || !validationCheck()) return 0;
+
+            float initialLifespan = lifespan ?? 0f;
+            if (initialLifespan <= 0f) return 0;
+
+            // Delegate instantiation directly to the zero-allocation PlayAudio pipeline
+            int sessionId = PlayAudio(
+                key: key,
+                position: positionProvider(),
+                state: state,
+                validPlayersFilter: targetPlayerFilter,
+                loop: false,
+                volume: volume,
+                minDistance: minDistance,
+                maxDistance: maxDistance,
+                isSpatial: true,
+                priority: priority,
+                queue: false,
+                fadeInDuration: 0f,
+                persistent: false,
+                lifespan: lifespan,
+                autoCleanup: true
+            );
+
+            if (sessionId == 0) return 0;
+
+            // Reuse the existing trigonometric orbital transformation loop safely
+            MEC.Timing.RunCoroutine(TrackAndOrbitPositionLoop(positionProvider, validationCheck, sessionId, initialLifespan, orbitSettings));
             return sessionId;
         }
 
@@ -390,9 +588,18 @@
 
             speaker.Configure(state.Volume, state.MinDistance, state.MaxDistance, state.IsSpatial, null);
 
-            if (speaker is ISpeakerWithPlayerFilter filterSpeaker && state.PlayerFilter != null)
+            if (speaker is ISpeakerWithPlayerFilter filterSpeaker)
             {
-                filterSpeaker.SetValidPlayers(state.PlayerFilter);
+                if (state.StatePlayerFilter != null)
+                {
+                    // Injection of the compiled generic state-passing matrix
+                    filterSpeaker.SetValidPlayers(state.StatePlayerFilter, state.FilterState);
+                }
+                else if (state.PlayerFilter != null)
+                {
+                    // Fallback to legacy non-generic allocations for backward compatibility
+                    filterSpeaker.SetValidPlayers(state.PlayerFilter);
+                }
             }
 
             state.PhysicalSpeaker = speaker;
@@ -747,6 +954,63 @@
                     initialSamples: null,
                     initialLoop: false,
                     isQueued: false);
+            }
+
+            return allocatedSessionId;
+        }
+
+        public int CreateStreamSession<TState>(
+            Vector3 position,
+            bool isSpatial,
+            float minDistance,
+            float maxDistance,
+            float volume,
+            TState state,
+            Func<Player, TState, bool> validPlayersFilter,
+            AudioPriority priority = AudioPriority.Medium,
+            bool persistent = false,
+            float? lifespan = null,
+            bool autoCleanup = false)
+        {
+            var speakerState = new SpeakerState
+            {
+                Key = null,
+                Position = position,
+                Loop = false,
+                Volume = volume,
+                MinDistance = minDistance,
+                MaxDistance = maxDistance,
+                IsSpatial = isSpatial,
+                Priority = priority,
+                QueuedClips = new List<(string key, bool loop)>(),
+                Persistent = persistent,
+                Lifespan = lifespan,
+                AutoCleanup = autoCleanup,
+                PlaybackPosition = 0f,
+                IsPaused = false,
+                IsStreamOnly = true,
+
+                // Zero-Allocation State Mapping
+                FilterState = state,
+                StatePlayerFilter = (player, untypedState) => validPlayersFilter(player, (TState)untypedState)
+            };
+
+            int allocatedSessionId = 0;
+            Action stopCallback = () =>
+            {
+                if (allocatedSessionId != 0)
+                    FadeOutAudio(allocatedSessionId, this.Options.DefaultFadeOutDuration);
+            };
+
+            if (!ControllerIdManager.TryAllocate(priority, stopCallback, speakerState, out allocatedSessionId, out byte controllerId))
+            {
+                Log.Warn(" Failed to initialize stream-only session.");
+                return 0;
+            }
+
+            if (controllerId != 0)
+            {
+                InitializePhysicalSpeaker(controllerId, allocatedSessionId, speakerState, null, false, false);
             }
 
             return allocatedSessionId;

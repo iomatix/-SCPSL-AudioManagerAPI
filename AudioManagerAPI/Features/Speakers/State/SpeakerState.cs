@@ -71,6 +71,16 @@
         public Func<Player, bool> PlayerFilter { get; set; }
 
         /// <summary>
+        /// Stores the untyped reference to the custom state object used for allocation-free filtering.
+        /// </summary>
+        public object FilterState { get; set; }
+
+        /// <summary>
+        /// Stores the compiled non-generic bridge delegate for state-passing evaluation loops.
+        /// </summary>
+        public Func<Player, object, bool> StatePlayerFilter { get; set; }
+
+        /// <summary>
         /// A list of audio clips that are pending playback, represented as tuples:
         /// (<c>key</c>, <c>loop</c>).
         /// </summary>

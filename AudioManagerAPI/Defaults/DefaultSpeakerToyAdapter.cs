@@ -1,14 +1,12 @@
 ﻿namespace AudioManagerAPI.Defaults
 {
-    using System;
-    using System.Collections.Generic;
-    using UnityEngine;
-    using MEC;
-    using AudioManagerAPI.Features.Management;
     using AudioManagerAPI.Features.Speakers;
     using LabApi.Features.Audio;
     using LabApi.Features.Wrappers;
-
+    using MEC;
+    using System;
+    using System.Collections.Generic;
+    using UnityEngine;
     using Log = AudioManagerAPI.Logger.ApiLogger;
 
     /// <summary>
@@ -20,6 +18,12 @@
     {
         private readonly SpeakerToy speakerToy;
         private float targetVolume;
+
+        #region Player Filtering Caches
+        private Func<Player, bool> _legacyFilter;
+        private Func<Player, object, bool> _stateFilter;
+        private object _filterState;
+        #endregion
 
         /// <summary>
         /// Occurs when the speaker's audio queue becomes empty.
@@ -236,24 +240,51 @@
             }
         }
 
+        #region ISpeakerWithPlayerFilter Implementation
         /// <summary>
-        /// Sets the filter function for valid players.
-        /// <example>
-        /// <code>
-        /// adapter.SetValidPlayers(p => Player.ReadyList.Contains(p));
-        /// </code>
-        /// </example>
+        /// Binds a legacy allocation-heavy player predicate loop to the hardware speaker context.
         /// </summary>
-        /// <param name="playerFilter">A filter expression that determines which players are valid listeners.</param>
-        public void SetValidPlayers(Func<Player, bool> playerFilter)
+        public void SetValidPlayers(Func<Player, bool> filter)
         {
-            var transmitter = SpeakerToy.GetTransmitter(speakerToy.ControllerId);
-            if (transmitter != null)
-            {
-                transmitter.ValidPlayers = playerFilter;
-                Log.Debug($"[DefaultSpeakerToyAdapter] Set player filter for controller ID {speakerToy.ControllerId}.");
-            }
+            _legacyFilter = filter;
+            _stateFilter = null;
+            _filterState = null;
+
+            // Route the native transmitter filter to our instance-bound evaluation method
+            ValidPlayers = EvaluateTransmitterFilter;
         }
+
+        /// <summary>
+        /// Binds an allocation-free generic state-passing filter context directly to the speaker evaluation loop execution matrix.
+        /// </summary>
+        public void SetValidPlayers(Func<Player, object, bool> filter, object state)
+        {
+            _stateFilter = filter;
+            _filterState = state;
+            _legacyFilter = null;
+
+            // Route the native transmitter filter to our instance-bound evaluation method
+            ValidPlayers = EvaluateTransmitterFilter;
+        }
+
+        /// <summary>
+        /// Instanced bridge method evaluated by the underlying LabAPI/Northwood execution loop without generating runtime closure allocations.
+        /// </summary>
+        private bool EvaluateTransmitterFilter(Player player)
+        {
+            if (_stateFilter != null)
+            {
+                return _stateFilter(player, _filterState);
+            }
+
+            if (_legacyFilter != null)
+            {
+                return _legacyFilter(player);
+            }
+
+            return true;
+        }
+        #endregion
 
         /// <summary>
         /// Sets the playback volume for the speaker.

@@ -1,11 +1,10 @@
 ﻿namespace AudioManagerAPI.Controllers
 {
-    using System;
-    using System.Collections.Generic;
-    using MEC;
     using AudioManagerAPI.Features.Enums;
     using AudioManagerAPI.Speakers.State;
-
+    using MEC;
+    using System;
+    using System.Collections.Generic;
     using Log = AudioManagerAPI.Logger.ApiLogger;
 
     /// <summary>

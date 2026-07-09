@@ -1,9 +1,9 @@
 namespace AudioManagerAPI.Config
 {
+    using LabApi.Features.Console;
     using System;
     using System.IO;
     using System.Text.Json;
-    using LabApi.Features.Console;
 
     /// <summary>
     /// Thread-safe I/O orchestration engine responsible for serialization, 

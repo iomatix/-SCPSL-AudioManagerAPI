@@ -133,7 +133,7 @@
             float minDistance = 1f,
             float maxDistance = 20f);
 
-        
+
         /// <summary>
         /// Deploys a spatial audio session that dynamically orbits around a coordinate provider
         /// using real-time trigonometric wave calculations defined by the provided orbit settings.
@@ -149,6 +149,161 @@
             AudioPriority priority = AudioPriority.Medium,
             float? lifespan = null,
             Func<Player, bool> targetPlayerFilter = null);
+
+        #region Allocation-Free Generic Audio Pipelines
+
+        /// <summary>
+        /// Plays spatial audio at a specified 3D position with an allocation-free generic state player filter.
+        /// </summary>
+        /// <typeparam name="TState">The type of the state object passed to the filter calculation layer.</typeparam>
+        /// <param name="key">The unique cache identifier registry key of the target audio track resource.</param>
+        /// <param name="position">The targeted 3D vector coordinates for spatialized sound projection.</param>
+        /// <param name="state">The structural state context object reference passed down into the execution loop.</param>
+        /// <param name="validPlayersFilter">The allocation-free state-aware evaluation predicate executed per connected client.</param>
+        /// <param name="loop">Enforces seamless loop playback vectors when the stream boundary concludes.</param>
+        /// <param name="volume">The linear scale volume gain modifier ranging from 0.0 to 1.0.</param>
+        /// <param name="minDistance">The spatial boundary range within which attenuation processing remains static.</param>
+        /// <param name="maxDistance">The absolute spatial boundary cutoff point where acoustic energy falls to zero.</param>
+        /// <param name="isSpatial">Enforces spatial 3D virtualization matrices over standard mono/stereo signals.</param>
+        /// <param name="priority">The scheduling priority parameter defining allocation behaviors under hardware constraints.</param>
+        /// <param name="queue">Enforces sequential appending behaviors to an existing active playback queue track.</param>
+        /// <param name="fadeInDuration">The continuous linear interpolation timeline duration for acoustic fading gains.</param>
+        /// <param name="persistent">Enforces context persistence rules across server round lifecycle resets.</param>
+        /// <param name="lifespan">Optional execution timeline track limiting session lifespan prior to forced reclamation.</param>
+        /// <param name="autoCleanup">Enforces immediate destruction sequences upon clip or streaming queue exhaustion.</param>
+        /// <returns>The allocated abstract session identifier tracking index, or 0 if initialization constraints fail.</returns>
+        int PlayAudio<TState>(
+            string key,
+            Vector3 position,
+            TState state,
+            Func<Player, TState, bool> validPlayersFilter,
+            bool loop = false,
+            float volume = 1f,
+            float minDistance = 1f,
+            float maxDistance = 20f,
+            bool isSpatial = true,
+            AudioPriority priority = AudioPriority.Medium,
+            bool queue = false,
+            float fadeInDuration = 0f,
+            bool persistent = false,
+            float? lifespan = null,
+            bool autoCleanup = false);
+
+        /// <summary>
+        /// Plays non-spatialized audio globally audible across full or selective grids using an allocation-free generic state filter.
+        /// </summary>
+        /// <typeparam name="TState">The type of the state object passed to the filter calculation layer.</typeparam>
+        /// <param name="key">The unique cache identifier registry key of the target audio track resource.</param>
+        /// <param name="state">The structural state context object reference passed down into the execution loop.</param>
+        /// <param name="validPlayersFilter">The allocation-free state-aware evaluation predicate executed per connected client.</param>
+        /// <param name="loop">Enforces seamless loop playback vectors when the stream boundary concludes.</param>
+        /// <param name="volume">The linear scale volume gain modifier ranging from 0.0 to 1.0.</param>
+        /// <param name="priority">The scheduling priority parameter defining allocation behaviors under hardware constraints.</param>
+        /// <param name="queue">Enforces sequential appending behaviors to an existing active playback queue track.</param>
+        /// <param name="fadeInDuration">The continuous linear interpolation timeline duration for acoustic fading gains.</param>
+        /// <param name="persistent">Enforces context persistence rules across server round lifecycle resets.</param>
+        /// <param name="lifespan">Optional execution timeline track limiting session lifespan prior to forced reclamation.</param>
+        /// <param name="autoCleanup">Enforces immediate destruction sequences upon clip or streaming queue exhaustion.</param>
+        /// <returns>The allocated abstract session identifier tracking index, or 0 if initialization constraints fail.</returns>
+        int PlayGlobalAudio<TState>(
+            string key,
+            TState state,
+            Func<Player, TState, bool> validPlayersFilter,
+            bool loop = false,
+            float volume = 1f,
+            AudioPriority priority = AudioPriority.Medium,
+            bool queue = false,
+            float fadeInDuration = 0f,
+            bool persistent = false,
+            float? lifespan = null,
+            bool autoCleanup = false);
+
+        /// <summary>
+        /// Instantiates an automated spatial session that dynamically updates its acoustic panning vectors by tracking a frame-by-frame coordinate generator loop, utilizing an allocation-free generic state player filter.
+        /// </summary>
+        /// <typeparam name="TState">The type of the state object passed to the filter calculation layer.</typeparam>
+        /// <param name="key">The unique cache identifier registry key of the target audio track resource.</param>
+        /// <param name="positionProvider">The delegate method generator returning real-time target transformation vectors.</param>
+        /// <param name="validationCheck">The lifecycle check execution loop validating whether the parent entity constraint remains active.</param>
+        /// <param name="state">The structural state context object reference passed down into the execution loop.</param>
+        /// <param name="targetPlayerFilter">The allocation-free state-aware evaluation predicate executed per connected client.</param>
+        /// <param name="priority">The scheduling priority parameter defining allocation behaviors under hardware constraints.</param>
+        /// <param name="lifespan">Optional execution timeline track limiting session lifespan prior to forced reclamation.</param>
+        /// <param name="volume">The linear scale volume gain modifier ranging from 0.0 to 1.0.</param>
+        /// <param name="minDistance">The spatial boundary range within which attenuation processing remains static.</param>
+        /// <param name="maxDistance">The absolute spatial boundary cutoff point where acoustic energy falls to zero.</param>
+        /// <returns>The allocated abstract session identifier tracking index, or 0 if initialization constraints fail.</returns>
+        int PlayTrackingAudio<TState>(
+            string key,
+            Func<Vector3> positionProvider,
+            Func<bool> validationCheck,
+            TState state,
+            Func<Player, TState, bool> targetPlayerFilter,
+            AudioPriority priority = AudioPriority.Medium,
+            float? lifespan = null,
+            float volume = 1f,
+            float minDistance = 1f,
+            float maxDistance = 20f);
+
+        /// <summary>
+        /// Deploys a spatial audio session that dynamically orbits around a coordinate provider using real-time trigonometric wave calculations, utilizing an allocation-free generic state player filter.
+        /// </summary>
+        /// <typeparam name="TState">The type of the state object passed to the filter calculation layer.</typeparam>
+        /// <param name="key">The unique cache identifier registry key of the target audio track resource.</param>
+        /// <param name="positionProvider">The delegate method generator returning real-time target transform center mass points.</param>
+        /// <param name="validationCheck">The lifecycle check execution loop validating whether the parent entity constraint remains active.</param>
+        /// <param name="volume">The linear scale volume gain modifier ranging from 0.0 to 1.0.</param>
+        /// <param name="minDistance">The spatial boundary range within which attenuation processing remains static.</param>
+        /// <param name="maxDistance">The absolute spatial boundary cutoff point where acoustic energy falls to zero.</param>
+        /// <param name="orbitSettings">The mathematical settings defining orbital radius bounds, frequency velocities, and layout heights.</param>
+        /// <param name="state">The structural state context object reference passed down into the execution loop.</param>
+        /// <param name="targetPlayerFilter">The allocation-free state-aware evaluation predicate executed per connected client.</param>
+        /// <param name="priority">The scheduling priority parameter defining allocation behaviors under hardware constraints.</param>
+        /// <param name="lifespan">Optional execution timeline track limiting session lifespan prior to forced reclamation.</param>
+        /// <returns>The allocated abstract session identifier tracking index, or 0 if initialization constraints fail.</returns>
+        int PlayOrbitingAudio<TState>(
+            string key,
+            Func<Vector3> positionProvider,
+            Func<bool> validationCheck,
+            float volume,
+            float minDistance,
+            float maxDistance,
+            OrbitSettings orbitSettings,
+            TState state,
+            Func<Player, TState, bool> targetPlayerFilter,
+            AudioPriority priority = AudioPriority.Medium,
+            float? lifespan = null);
+
+        /// <summary>
+        /// Creates a new continuous audio streaming session at a specified 3D position, utilizing an allocation-free generic state player filter.
+        /// </summary>
+        /// <typeparam name="TState">The type of the state object passed to the filter calculation layer.</typeparam>
+        /// <param name="position">The targeted 3D vector coordinates for spatialized sound projection.</param>
+        /// <param name="isSpatial">Enforces spatial 3D virtualization matrices over standard mono/stereo signals.</param>
+        /// <param name="minDistance">The spatial boundary range within which attenuation processing remains static.</param>
+        /// <param name="maxDistance">The absolute spatial boundary cutoff point where acoustic energy falls to zero.</param>
+        /// <param name="volume">The linear scale volume gain modifier ranging from 0.0 to 1.0.</param>
+        /// <param name="state">The structural state context object reference passed down into the execution loop.</param>
+        /// <param name="validPlayersFilter">The allocation-free state-aware evaluation predicate executed per connected client.</param>
+        /// <param name="priority">The scheduling priority parameter defining allocation behaviors under hardware constraints.</param>
+        /// <param name="persistent">Enforces context persistence rules across server round lifecycle resets.</param>
+        /// <param name="lifespan">Optional execution timeline track limiting session lifespan prior to forced reclamation.</param>
+        /// <param name="autoCleanup">Enforces immediate destruction sequences upon streaming queue exhaustion.</param>
+        /// <returns>The allocated abstract session identifier tracking index, or 0 if initialization constraints fail.</returns>
+        int CreateStreamSession<TState>(
+            Vector3 position,
+            bool isSpatial,
+            float minDistance,
+            float maxDistance,
+            float volume,
+            TState state,
+            Func<Player, TState, bool> validPlayersFilter,
+            AudioPriority priority = AudioPriority.Medium,
+            bool persistent = false,
+            float? lifespan = null,
+            bool autoCleanup = false);
+
+        #endregion
 
         /// <summary>
         /// Sets the volume for the specified session.
