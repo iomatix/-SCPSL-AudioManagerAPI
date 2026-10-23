@@ -302,4 +302,3 @@ Version **2.3.0** introduces design optimizations to enforce the **Dependency In
 ## 📄 License
 
 This project is licensed under the MIT License. See the `LICENSE` file for details.
-```
