@@ -96,6 +96,9 @@
             bool autoCleanup = false)
         {
             if (key == null) throw new ArgumentNullException(nameof(key));
+            // Fast-Path: Zero-allocation drop on channel saturation
+            if (!persistent && !ControllerIdManager.CanAllocate(priority))
+                return 0;
 
             float[] samples = audioCache.Get(key);
             if (samples == null)
@@ -123,6 +126,7 @@
                 PlaybackPosition = 0f
             };
 
+
             int allocatedSessionId = 0;
 
             // Localized atomic callback assignment
@@ -134,7 +138,7 @@
             // Deadlock Elimination: Calling TryAllocate detached from an outer lock destroys the A->B->A lock inversion matrix
             if (!ControllerIdManager.TryAllocate(priority, stopCallback, state, out allocatedSessionId, out byte controllerId))
             {
-                Log.Warn($" Failed to initialize session for audio {key}.");
+                Log.Debug($"Voice dropped due to priority saturation: {key} (Priority: {priority})");
                 return 0;
             }
 
@@ -208,6 +212,10 @@
             if (key == null) throw new ArgumentNullException(nameof(key));
             if (validPlayersFilter == null) throw new ArgumentNullException(nameof(validPlayersFilter));
 
+            // Fast-Path: If physical slots are saturated and priority cannot evict, exit immediately (0 allocations, 0 I/O lag)
+            if (!persistent && !ControllerIdManager.CanAllocate(priority))
+                return 0;
+
             float[] samples = audioCache.Get(key);
             if (samples == null)
             {
@@ -215,7 +223,6 @@
                 return 0;
             }
 
-            // High-Performance Bridge: Encapsulate generic state variables into the native layout allocation
             var speakerState = new SpeakerState
             {
                 Key = queue ? null : key,
@@ -231,8 +238,6 @@
                 AutoCleanup = autoCleanup,
                 PlaybackPosition = 0f,
                 QueuedClips = queue ? new List<(string key, bool loop)> { (key, loop) } : new List<(string key, bool loop)>(),
-
-                // State Binding (Zero Heap Inflation)
                 FilterState = state,
                 StatePlayerFilter = (player, untypedState) => validPlayersFilter(player, (TState)untypedState)
             };
@@ -245,7 +250,8 @@
 
             if (!ControllerIdManager.TryAllocate(priority, stopCallback, speakerState, out allocatedSessionId, out byte controllerId))
             {
-                Log.Warn($"Failed to initialize state-passing session for audio {key}.");
+                // Voice dropped gracefully due to channel saturation - Debug only, never Warn!
+                Log.Debug($"Voice dropped due to priority saturation: {key} (Priority: {priority})");
                 return 0;
             }
 

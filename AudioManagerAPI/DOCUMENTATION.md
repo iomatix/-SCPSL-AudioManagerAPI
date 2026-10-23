@@ -40,6 +40,12 @@ public static void SaveConfig(AudioConfig config)
 
 Manages physical audio controller IDs (1-254) with priority-based allocation. Manages abstract session states independently of physical IDs.
 
+### 🔹 `CanAllocate()`
+**Description:** Lock-free fast check to determine if an allocation or eviction is theoretically possible. Prevents wasteful heap allocations in caller methods when the pool is saturated.
+```csharp
+public static bool CanAllocate(AudioPriority priority)
+```
+
 ### 🔹 `TryAllocate()`
 **Description:** Registers a new audio session and attempts to allocate a physical controller ID.
 ```csharp

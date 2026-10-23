@@ -1,5 +1,15 @@
 ﻿# SCPSL-AudioManagerAPI — Changelog
 
+## [2.4.3] - 2026-10-24
+
+### Performance & Optimization
+* **Zero-Allocation Fast-Path Allocation Check:** Introduced `ControllerIdManager.CanAllocate()` to immediately discard incoming audio requests when physical controller IDs (1–254) are saturated and the requested priority cannot evict any active session. This bypasses `SpeakerState`, buffer, and closure allocations entirely on rejected calls.
+* **Eliminated Server Tick Freezes from Synchronous I/O:** Graceful voice dropping due to pool saturation is now treated as an expected mixer behavior rather than an error condition. Downgraded saturation warnings from `Warn` to `Debug`, eliminating main-thread disk/stdout logging stalls during heavy audio spikes.
+* **Optimized Priority Eviction Traversal:** `TryEvictLowerPriority()` now short-circuits immediately for `AudioPriority.Lowest`, avoiding unnecessary $O(N)$ dictionary scans across all 254 active controllers.
+
+### Fixes
+* **Logger Prefix Deduplication:** Fixed an issue where `ApiLogger` prepended duplicate `[AudioManagerAPI]` tags when bridging to LabAPI console output.
+
 ## 🆕 Changelog — Version 2.4.2 — Zero-Allocation Generic State-Passing & Hot Path Isolation
 
 ### Architectural Innovation (Generic Context State-Passing)

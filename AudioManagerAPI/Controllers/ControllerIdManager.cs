@@ -13,37 +13,52 @@
     /// </summary>
     public static class ControllerIdManager
     {
-        // Object for thread safety
         private static readonly object lockObject = new object();
-
-        // Physical controller IDs available for immediate use
         private static readonly Stack<byte> availableIds = new Stack<byte>(254);
-
-        // Maps physical controller ID to the currently active Session ID
         private static readonly Dictionary<byte, int> activeControllers = new Dictionary<byte, int>(254);
-
-        // Abstract Session data
         private static readonly Dictionary<int, SessionData> activeSessions = new Dictionary<int, SessionData>();
 
-        // Auto-incrementing session ID
         private static int nextSessionId = 1;
 
-        // Internal struct to hold all data related to an audio session
         private struct SessionData
         {
             public AudioPriority Priority;
             public Action StopCallback;
             public SpeakerState State;
-            public byte? CurrentControllerId; // Null if evicted or waiting
+            public byte? CurrentControllerId;
         }
 
         static ControllerIdManager()
         {
-            // Initialize physical slots (1 to 254)
-            // Push in reverse order so ID 1 is popped first (optional, but cleaner)
             for (byte i = 254; i >= 1; i--)
             {
                 availableIds.Push(i);
+            }
+        }
+
+        /// <summary>
+        /// Lock-free fast check to determine if an allocation or eviction is theoretically possible.
+        /// Prevents wasteful heap allocations in caller methods when the pool is saturated.
+        /// </summary>
+        public static bool CanAllocate(AudioPriority priority)
+        {
+            lock (lockObject)
+            {
+                if (availableIds.Count > 0)
+                    return true;
+
+                // Priority.Lowest can NEVER evict anything because no priority is strictly lower than it
+                if (priority <= AudioPriority.Lowest)
+                    return false;
+
+                // Check if any active session has a strictly lower priority
+                foreach (var kvp in activeControllers)
+                {
+                    if (activeSessions.TryGetValue(kvp.Value, out var session) && session.Priority < priority)
+                        return true;
+                }
+
+                return false;
             }
         }
 
@@ -56,25 +71,15 @@
 
             lock (lockObject)
             {
-                sessionId = nextSessionId++;
                 controllerId = 0;
-
-                // Create session record
-                var session = new SessionData
-                {
-                    Priority = priority,
-                    StopCallback = stopCallback,
-                    State = state,
-                    CurrentControllerId = null
-                };
 
                 // 1. Try to get a free physical ID
                 if (availableIds.Count > 0)
                 {
                     controllerId = availableIds.Pop();
                 }
-                // 2. No free IDs, try to evict a lower priority session
-                else
+                // 2. No free IDs; attempt eviction only if newPriority is higher than Lowest
+                else if (priority > AudioPriority.Lowest)
                 {
                     byte? evictedId = TryEvictLowerPriority(priority, out callbackToInvoke);
                     if (evictedId.HasValue)
@@ -83,22 +88,43 @@
                     }
                 }
 
-                // If we got a physical ID (either free or evicted)
+                // If allocation succeeded
                 if (controllerId != 0)
                 {
-                    session.CurrentControllerId = controllerId;
+                    sessionId = nextSessionId++;
+
+                    var session = new SessionData
+                    {
+                        Priority = priority,
+                        StopCallback = stopCallback,
+                        State = state,
+                        CurrentControllerId = controllerId
+                    };
+
                     activeControllers[controllerId] = sessionId;
                     activeSessions[sessionId] = session;
 
-                    Log.Debug($" Session {sessionId} allocated controller ID {controllerId} with priority {priority} at {Timing.LocalTime}.");
+                    Log.Debug($"Session {sessionId} allocated controller ID {controllerId} with priority {priority} at {Timing.LocalTime}.");
                 }
                 else
                 {
-                    // Allocation failed, but we still might want to keep the session state if it's persistent
+                    // Allocation failed: only track session if explicitly marked as persistent
                     if (state != null && state.Persistent)
                     {
+                        sessionId = nextSessionId++;
+                        var session = new SessionData
+                        {
+                            Priority = priority,
+                            StopCallback = stopCallback,
+                            State = state,
+                            CurrentControllerId = null
+                        };
                         activeSessions[sessionId] = session;
-                        Log.Debug($" Session {sessionId} failed allocation but state saved (persistent) at {Timing.LocalTime}.");
+                        Log.Debug($"Session {sessionId} failed allocation but state saved (persistent) at {Timing.LocalTime}.");
+                    }
+                    else
+                    {
+                        sessionId = 0;
                     }
                 }
             }
@@ -115,17 +141,19 @@
         private static byte? TryEvictLowerPriority(AudioPriority newPriority, out Action evictionCallback)
         {
             evictionCallback = null;
+
+            if (newPriority <= AudioPriority.Lowest || activeControllers.Count == 0)
+                return null;
+
             byte? candidateId = null;
             int? candidateSessionId = null;
             AudioPriority lowestFound = newPriority;
 
-            // Find the lowest priority active controller
             foreach (var kvp in activeControllers)
             {
                 int sId = kvp.Value;
                 if (activeSessions.TryGetValue(sId, out var session))
                 {
-                    // We look for strictly lower priority
                     if (session.Priority < lowestFound)
                     {
                         lowestFound = session.Priority;
@@ -137,28 +165,23 @@
 
             if (candidateId.HasValue && candidateSessionId.HasValue)
             {
-                // We found a victim
                 var victimSession = activeSessions[candidateSessionId.Value];
-
-                // Prepare callback for external execution
                 evictionCallback = victimSession.StopCallback;
 
-                // Update victim's state
                 victimSession.CurrentControllerId = null;
-                activeSessions[candidateSessionId.Value] = victimSession; // Update struct
+                activeSessions[candidateSessionId.Value] = victimSession;
 
-                // If victim isn't persistent, remove its session entirely
                 if (victimSession.State == null || !victimSession.State.Persistent)
                 {
                     activeSessions.Remove(candidateSessionId.Value);
                 }
 
                 activeControllers.Remove(candidateId.Value);
-                Log.Debug($" Evicted session {candidateSessionId.Value} from controller {candidateId.Value}.");
+                Log.Debug($"Evicted session {candidateSessionId.Value} from controller {candidateId.Value}.");
                 return candidateId.Value;
             }
 
-            return null; // Nothing lower priority found
+            return null;
         }
 
         /// <summary>
@@ -171,20 +194,19 @@
                 if (activeControllers.TryGetValue(controllerId, out int sessionId))
                 {
                     activeControllers.Remove(controllerId);
-                    availableIds.Push(controllerId); // Return to pool
+                    availableIds.Push(controllerId);
 
                     if (activeSessions.TryGetValue(sessionId, out var session))
                     {
                         session.CurrentControllerId = null;
                         activeSessions[sessionId] = session;
 
-                        // If not persistent, clean up the session
                         if (session.State == null || !session.State.Persistent)
                         {
                             activeSessions.Remove(sessionId);
                         }
                     }
-                    Log.Debug($" Released controller ID {controllerId} (from session {sessionId}) at {Timing.LocalTime}.");
+                    Log.Debug($"Released controller ID {controllerId} (from session {sessionId}) at {Timing.LocalTime}.");
                 }
             }
         }
@@ -229,11 +251,10 @@
                 {
                     if (session.CurrentControllerId.HasValue)
                     {
-                        // Force release the physical controller if it's active
                         ReleaseController(session.CurrentControllerId.Value);
                     }
                     activeSessions.Remove(sessionId);
-                    Log.Debug($" Destroyed session {sessionId}.");
+                    Log.Debug($"Destroyed session {sessionId}.");
                 }
             }
         }
@@ -250,15 +271,13 @@
                 activeSessions.Clear();
                 availableIds.Clear();
 
-                // Re-initialize physical slots (254 to 1) to match the static constructor
                 for (byte i = 254; i >= 1; i--)
                 {
                     availableIds.Push(i);
                 }
 
                 nextSessionId = 1;
-
-                Log.Debug(" ControllerIdManager state has been fully reset.");
+                Log.Debug("ControllerIdManager state has been fully reset.");
             }
         }
     }
